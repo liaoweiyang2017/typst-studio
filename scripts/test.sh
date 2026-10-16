@@ -35,3 +35,6 @@ for test in ['.build/sidebar-interaction', '.build/preview-position']:
 PYINTERACTION
 swiftc Sources/TypstStudio/Compiler.swift Sources/TypstStudio/WatchCompiler.swift Sources/TypstStudio/ProjectFiles.swift Sources/TypstStudio/StudioModel.swift Sources/TypstStudio/Preview.swift Tests/PDFColorTests.swift -o .build/pdf-color-tests
 .build/pdf-color-tests
+
+swiftc Sources/TypstStudio/UpdateChecker.swift Tests/UpdateCheckerTests.swift -o .build/update-tests
+.build/update-tests

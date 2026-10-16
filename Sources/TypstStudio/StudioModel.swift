@@ -46,6 +46,9 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     @Published var pdfAppearance = UserDefaults.standard.string(forKey: "pdfAppearance") ?? "Automatic" {
         didSet { UserDefaults.standard.set(pdfAppearance, forKey: "pdfAppearance") }
     }
+    @Published var lightPDFAppearance = UserDefaults.standard.string(forKey: "lightPDFAppearance") ?? "Original" {
+        didSet { UserDefaults.standard.set(lightPDFAppearance, forKey: "lightPDFAppearance") }
+    }
     @Published var darkPDFAppearance = UserDefaults.standard.string(forKey: "darkPDFAppearance") ?? "Night" {
         didSet { UserDefaults.standard.set(darkPDFAppearance, forKey: "darkPDFAppearance") }
     }

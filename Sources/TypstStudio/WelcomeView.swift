@@ -14,7 +14,7 @@ struct WelcomeView: View {
                     Image(nsImage: icon).resizable().scaledToFit().frame(width: 132, height: 132)
                 }
                 Text("Typst Studio").font(.system(size: 42, weight: .bold)).padding(.top, 18)
-                Text("Version 0.1.4").font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
+                Text("Version 0.1.5").font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
                 Spacer().frame(height: 38)
                 VStack(spacing: 13) {
                     welcomeButton("Open Folder…", icon: "folder") { model.openPanel(folder: true) }
@@ -45,7 +45,7 @@ struct WelcomeView: View {
                                     }
                                 } label: {
                                     HStack(spacing: 12) { Image(systemName: "folder").foregroundStyle(.blue); VStack(alignment: .leading, spacing: 4) { Text(URL(fileURLWithPath: path).lastPathComponent).font(.system(size: 14, weight: .medium)); Text(path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).font(.caption).foregroundStyle(.secondary).lineLimit(2) }; Spacer(); if openingRecent == path { ProgressView().controlSize(.small) } }.padding(.horizontal, 10).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                                }.buttonStyle(RecentProjectStyle(selected: openingRecent == path)).disabled(openingRecent != nil)
+                                }.buttonStyle(WelcomeRowStyle(selected: openingRecent == path)).disabled(openingRecent != nil)
                             }
                         }
                     }
@@ -66,13 +66,30 @@ struct WelcomeView: View {
         }
     }
     func welcomeButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { HStack(spacing: 18) { Image(systemName: icon).font(.system(size: 23)).foregroundStyle(.blue).frame(width: 28); Text(title).font(.system(size: 18)); Spacer() }.padding(.horizontal, 23).frame(height: 57).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 13)) }.buttonStyle(.plain)
+        Button(action: action) { HStack(spacing: 18) { Image(systemName: icon).font(.system(size: 23)).foregroundStyle(.blue).frame(width: 28); Text(title).font(.system(size: 18)); Spacer() }.padding(.horizontal, 23).frame(height: 57).contentShape(Rectangle()) }.buttonStyle(WelcomeRowStyle(baseOpacity: 0.045, cornerRadius: 13))
     }
 }
 
-struct RecentProjectStyle: ButtonStyle {
-    let selected: Bool
+struct WelcomeRowStyle: ButtonStyle {
+    var selected = false
+    var baseOpacity = 0.0
+    var cornerRadius: CGFloat = 8
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.background(Color.primary.opacity(selected || configuration.isPressed ? 0.10 : 0), in: RoundedRectangle(cornerRadius: 8))
+        Feedback(label: configuration.label, pressed: configuration.isPressed, selected: selected, baseOpacity: baseOpacity, radius: cornerRadius)
+    }
+    private struct Feedback<Label: View>: View {
+        let label: Label
+        let pressed: Bool
+        let selected: Bool
+        let baseOpacity: Double
+        let radius: CGFloat
+        @State private var hovering = false
+        @Environment(\.isEnabled) private var enabled
+        var body: some View {
+            label.contentShape(Rectangle())
+                .background(Color.primary.opacity(pressed || selected ? 0.16 : hovering && enabled ? 0.10 : baseOpacity), in: RoundedRectangle(cornerRadius: radius))
+                .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Color.primary.opacity(hovering && enabled || selected ? 0.12 : 0)))
+                .onHover { hovering = $0 }
+        }
     }
 }

@@ -3,8 +3,8 @@ import PDFKit
 import CoreImage
 enum PDFRenderingStyle: String {
     case original = "Original", night = "Night", green = "Green"
-    static func resolve(_ mode: String, darkAlternative: String, isDark: Bool) -> Self {
-        if mode == "Automatic" { return isDark ? (Self(rawValue: darkAlternative) ?? .night) : .original }
+    static func resolve(_ mode: String, darkAlternative: String, isDark: Bool, lightAlternative: String = "Original") -> Self {
+        if mode == "Automatic" { return isDark ? (Self(rawValue: darkAlternative) ?? .night) : (Self(rawValue: lightAlternative) ?? .original) }
         return Self(rawValue: mode) ?? .original
     }
     func makeFilter() -> CIFilter? {
@@ -29,16 +29,17 @@ struct PreviewPosition {
 final class StudioPDFView: PDFView {
     private var renderingPreference = "Automatic"
     private var darkRenderingPreference = "Night"
+    private var lightRenderingPreference = "Original"
     private var appliedRenderingStyle: PDFRenderingStyle?
-    func configureRendering(mode: String, darkAlternative: String) {
-        renderingPreference = mode; darkRenderingPreference = darkAlternative; refreshPDFColors()
+    func configureRendering(mode: String, darkAlternative: String, lightAlternative: String = "Original") {
+        renderingPreference = mode; darkRenderingPreference = darkAlternative; lightRenderingPreference = lightAlternative; refreshPDFColors()
     }
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance(); refreshPDFColors()
     }
     private func refreshPDFColors() {
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let style = PDFRenderingStyle.resolve(renderingPreference, darkAlternative: darkRenderingPreference, isDark: isDark)
+        let style = PDFRenderingStyle.resolve(renderingPreference, darkAlternative: darkRenderingPreference, isDark: isDark, lightAlternative: lightRenderingPreference)
         guard style != appliedRenderingStyle else { return }
         appliedRenderingStyle = style; wantsLayer = true; layer?.masksToBounds = true
         // Filter only this viewport; retain PDFKit text selection, links and original PDF bytes.
@@ -107,12 +108,12 @@ struct PDFCanvas: NSViewRepresentable {
         view.clickedText = { model.jumpFromPDF($0) }
         view.activated = { [weak view] in model.preview = view }
         if primary || model.preview == nil { model.preview = view }; controls.view = view
-        view.configureRendering(mode: model.pdfAppearance, darkAlternative: model.darkPDFAppearance)
+        view.configureRendering(mode: model.pdfAppearance, darkAlternative: model.darkPDFAppearance, lightAlternative: model.lightPDFAppearance)
         context.coordinator.observe(view)
         return view
     }
     func updateNSView(_ view: StudioPDFView, context: Context) {
-        view.configureRendering(mode: model.pdfAppearance, darkAlternative: model.darkPDFAppearance)
+        view.configureRendering(mode: model.pdfAppearance, darkAlternative: model.darkPDFAppearance, lightAlternative: model.lightPDFAppearance)
         let key = model.previewDocumentKey
         guard view.document !== model.pdf || view.documentKey != key else { return }
         if let previousKey = view.documentKey, let position = view.readingPosition() {

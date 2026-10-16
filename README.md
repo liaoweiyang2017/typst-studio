@@ -1,6 +1,6 @@
 # Typst Studio
 
-A native macOS Typst editor built with SwiftUI, AppKit and PDFKit. Version 0.1.4.
+A native macOS Typst editor built with SwiftUI, AppKit and PDFKit. Version 0.1.5.
 
 Open `~/Applications/Typst Studio.app` (the verified local build). Installable DMG and ZIP archives are produced in `dist/`. Build and sign app bundles outside iCloud-synced folders. Includes Typst 0.15.1; no terminal setup is required for this local build.
 
@@ -19,9 +19,9 @@ See [analysis and feature gaps](docs/Edist-analysis.md). This is an initial impl
 
 Icon selection: **06 — 鸢尾蓝紫**, selected by the user. The selected production icon is `Resources/AppIcon.png`; alternative proposals remain local.
 
-## Release 0.1.4
+## Release 0.1.5
 
-Run `scripts/package-dmg.sh` after building to generate the Apple Silicon DMG with an Applications shortcut and SHA-256 checksum. See [release notes](docs/Release-0.1.4.md).
+Run `scripts/package-dmg.sh` after building to generate the Apple Silicon DMG with an Applications shortcut and SHA-256 checksum. See [release notes](docs/Release-0.1.5.md).
 
 Opening a folder discovers its main source automatically. Preview compilation uses temporary sibling files, so the source directory must be writable. The project root controls asset/import access. Search indexes text files up to 1 MB, returns at most 200 hits, and excludes generated build directories. The sidebar still displays those directories lazily.
 
@@ -32,3 +32,9 @@ The installed application always uses its bundled `Contents/Helpers/typst` binar
 Recent document switches reuse decoded PDF previews and incremental compiler state. Three sessions are retained per project; older sessions are evicted. Outline headings expand by default.
 
 PDF reading colors are configured in Settings: Automatic/Original/Night/Green, with a separate dark-appearance preference. They affect preview only. Cached documents also restore their reading position and zoom.
+
+## Updates and publishing
+
+Public downloads: https://github.com/liaoweiyang2017/typst-studio-releases/releases . Source remains in this private repository. Startup checks are asynchronous and configurable. Settings now offer separate automatic PDF palettes for light and dark appearance.
+
+After local build/tests and DMG packaging, run `scripts/publish-release.sh`. The public repository Action verifies the uploaded release and generates `update.json`; check its successful run before announcing a release. No private-source access token is used by that workflow.

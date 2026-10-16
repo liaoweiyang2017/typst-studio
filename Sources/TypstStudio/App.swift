@@ -5,13 +5,20 @@ import PDFKit
 @main struct TypstStudioApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var model = StudioModel()
+    @StateObject private var updates = UpdateChecker()
     var body: some Scene {
         Window("Typst Studio", id: "studio") {
             Group {
                 if model.showWelcome { WelcomeView(model: model) }
                 else { StudioView(model: model) }
             }
-                .onAppear { delegate.model = model; NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true) }
+                .onAppear { delegate.model = model; NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true); Task { await updates.checkAtLaunch() } }
+                .sheet(isPresented: $model.showSettings) { SettingsView(model: model).environmentObject(updates) }
+                .alert("Software Update", isPresented: $updates.showResult) {
+                    if updates.available?.isCompatible == true { Button("Download Update") { updates.openDownload() } }
+                    Button("OK", role: .cancel) {}
+                } message: { Text(updates.status) }
+                .preferredColorScheme(model.theme == "Dark" ? .dark : model.theme == "Light" ? .light : nil)
                 .background(WindowGuard(model: model))
                 .onOpenURL { if ProjectFiles.isDirectory($0) { model.openProject($0) } else { model.openFile($0) } }
         }.defaultSize(width: 1360, height: 900)
@@ -27,6 +34,9 @@ import PDFKit
                 Button("Save As…") { model.save(as: true) }.keyboardShortcut("s", modifiers: [.command, .shift])
                 Divider()
                 Button("Export PDF…") { model.exportPDF() }.keyboardShortcut("e", modifiers: [.command, .shift])
+            }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Task { await updates.check() } }.disabled(updates.isChecking)
             }
             CommandGroup(replacing: .appSettings) { Button("Settings…") { model.showSettings = true }.keyboardShortcut(",") }
             CommandMenu("Typeset") {
@@ -80,7 +90,6 @@ struct StudioView: View {
             }
         }
         .sheet(isPresented: $model.showSymbols) { SymbolsView(model: model) }
-        .sheet(isPresented: $model.showSettings) { SettingsView(model: model) }
         .sheet(isPresented: Binding(get: { model.assetURL != nil }, set: { if !$0 { model.assetURL = nil } })) {
             VStack {
                 HStack { Text(model.assetURL?.lastPathComponent ?? "Preview").font(.headline); Spacer(); Button("Done") { model.assetURL = nil } }
@@ -267,6 +276,7 @@ struct SymbolsView: View {
 }
 struct SettingsView: View {
     @ObservedObject var model: StudioModel
+    @EnvironmentObject private var updates: UpdateChecker
     @State var font = "New Computer Modern"
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -279,7 +289,13 @@ struct SettingsView: View {
                     Text("Night").tag("Night")
                     Text("Green reading mode").tag("Green")
                 }
+                Picker("PDF in light appearance", selection: $model.lightPDFAppearance) {
+                    Text("Original colors").tag("Original")
+                    Text("Night").tag("Night")
+                    Text("Green reading mode").tag("Green")
+                }.disabled(model.pdfAppearance != "Automatic")
                 Picker("PDF in dark appearance", selection: $model.darkPDFAppearance) {
+                    Text("Original colors").tag("Original")
                     Text("Night").tag("Night")
                     Text("Green reading mode").tag("Green")
                 }.disabled(model.pdfAppearance != "Automatic")
@@ -288,11 +304,21 @@ struct SettingsView: View {
                 Toggle("System spell checking", isOn: $model.spellCheck)
                 Toggle("Typing sound", isOn: $model.typingSound)
                 Toggle("Preview follows cursor (text matching)", isOn: $model.followCursor)
+                Toggle("Check for updates on startup", isOn: $updates.checkOnStartup)
+                HStack {
+                    Button(updates.isChecking ? "Checking…" : "Check for Updates…") { Task { await updates.check(presentResult: false) } }.disabled(updates.isChecking)
+                    Spacer()
+                    Text("Version " + updates.currentVersion).font(.caption).foregroundStyle(.secondary)
+                }
+                Text(updates.status).font(.caption).foregroundStyle(.secondary)
+                if let available = updates.available, available.isCompatible {
+                    Button("Download " + available.version) { updates.openDownload() }
+                }
                 Picker("Document font", selection: $font) { ForEach(NSFontManager.shared.availableFontFamilies.sorted(), id: \.self) { Text($0) } }
                 Button("Insert font setting") { model.showSettings = false; model.insert("#set text(font: \"\(font)\")\n") }
             }.formStyle(.grouped)
             Text("⌘-click a PDF text line to find its source. Matching is text based; formulas and repeated text may not map precisely.").font(.caption).foregroundStyle(.secondary)
-        }.padding(24).frame(width: 560, height: 560)
+        }.padding(24).frame(width: 580, height: 650)
         .onChange(of: model.fontSize) { _, value in UserDefaults.standard.set(value, forKey: "fontSize") }
         .onChange(of: model.theme) { _, value in UserDefaults.standard.set(value, forKey: "theme") }
     }

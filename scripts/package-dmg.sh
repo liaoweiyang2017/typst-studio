@@ -25,3 +25,15 @@ mkdir -p dist
 hdiutil create -volname "Typst Studio $VERSION" -srcfolder "$STAGE" -ov -format UDZO "dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg"
 hdiutil verify "dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg"
 shasum -a 256 "dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg" > "dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg.sha256"
+
+python3 - "$APP/Contents/Info.plist" "$ARCH" <<'PYINFO'
+import json, plistlib, sys
+from pathlib import Path
+with open(sys.argv[1], 'rb') as stream:
+    info = plistlib.load(stream)
+Path('dist/release-info.json').write_text(json.dumps({
+    'version': info['CFBundleShortVersionString'],
+    'minimum_macos': info['LSMinimumSystemVersion'],
+    'architecture': sys.argv[2],
+}, indent=2) + '\n')
+PYINFO

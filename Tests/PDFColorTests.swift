@@ -7,6 +7,8 @@ import CoreImage
         precondition(PDFRenderingStyle.resolve("Automatic", darkAlternative: "Night", isDark: false) == .original)
         precondition(PDFRenderingStyle.resolve("Automatic", darkAlternative: "Night", isDark: true) == .night)
         precondition(PDFRenderingStyle.resolve("Automatic", darkAlternative: "Green", isDark: true) == .green)
+        precondition(PDFRenderingStyle.resolve("Automatic", darkAlternative: "Night", isDark: false, lightAlternative: "Green") == .green)
+        precondition(PDFRenderingStyle.resolve("Automatic", darkAlternative: "Green", isDark: false, lightAlternative: "Night") == .night)
         precondition(PDFRenderingStyle.resolve("Green", darkAlternative: "Night", isDark: false) == .green)
         let context = CIContext(options: [.useSoftwareRenderer: true])
         func pixel(_ style: PDFRenderingStyle, value: CGFloat) -> [UInt8] {
