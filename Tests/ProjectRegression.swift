@@ -34,7 +34,7 @@ import PDFKit
         model.changed("#set text(font: )")
         try await waitUntil { !model.compiling && !model.diagnostics.isEmpty }
         precondition(model.successfulRevision != model.revision && model.pdf != nil)
-        precondition(model.errorLine == 1)
+        precondition(model.errorLine == 1, "Expected primary source line: \(model.diagnostics)")
         model.changed("= Recovered")
         try await waitUntil { model.successfulRevision == model.revision }
         precondition(model.diagnostics.isEmpty)

@@ -12,6 +12,14 @@ enum StudioLanguage {
         return simplifiedChinese[key] ?? key
     }
     static let simplifiedChinese: [String: String] = [
+        "Document changed. Try navigating again.": "文档已更新，请重新定位。",
+        "Source maps locate formulas and included files. Use ⇧⌘J from source, ⌥⌘J from selected PDF text, or ⌘-click a PDF glyph. Unrendered code has no page position.": "源码映射支持公式和被引用文件。源码中按 ⇧⌘J，PDF 选中文字后按 ⌥⌘J，或按住 ⌘ 点击 PDF 字形。未渲染的代码没有页面位置。",
+        "Wait for compilation to finish, then try again.": "请等编译完成后再定位。",
+        "No source span at this position. Try clicking a visible glyph.": "此位置没有源码映射，请点击可见文字或公式字形。",
+        "No rendered position for this source.": "这段源码没有对应的页面位置。",
+        "Source belongs to an external package.": "该位置来自项目外部的包源码。",
+        "Preview entry": "预览主文档",
+
         "Select text and use Show in PDF (⇧⌘J) or Show in Source (⌥⌘J). You can also ⌘-click a text line. Text matching cannot precisely locate formulas or generated content.": "选择文字后使用“在 PDF 中定位”（⇧⌘J）或“在源码中定位”（⌥⌘J），也可按住 ⌘ 点击文本行。文本匹配不能精确定位公式或自动生成的内容。",
         "Show in PDF": "在 PDF 中定位",
         "Show in Source": "在源码中定位",
@@ -69,7 +77,7 @@ enum StudioLanguage {
         "PDF in dark appearance": "深色外观下的 PDF",
         "Preview colors only. Exported PDFs keep their original colors.": "仅改变预览配色，导出的 PDF 保留原始颜色。",
         "Navigation": "导航",
-        "Preview follows cursor (text matching)": "预览跟随光标（文本匹配）",
+        "Preview follows cursor (source map)": "预览跟随光标（源码映射）",
         "⌘-click a PDF text line to find its source. Matching is text based; formulas and repeated text may not map precisely.": "按住 ⌘ 点击 PDF 文本行可定位源码。此功能基于文本匹配，公式及重复文本可能无法精确定位。",
         "Current version": "当前版本",
         "Check for updates on startup": "启动时检查更新",
@@ -90,7 +98,7 @@ enum StudioLanguage {
         "Compile": "编译",
         "Symbols": "符号",
         "Pop Out Preview": "独立预览窗口",
-        "Follow Cursor (Text Match)": "跟随光标（文本匹配）",
+        "Follow Cursor (Source Map)": "跟随光标（源码映射）",
         "Find…": "查找…",
         "Download Update": "下载更新",
         "OK": "好",

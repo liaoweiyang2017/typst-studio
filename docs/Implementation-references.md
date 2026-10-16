@@ -60,3 +60,22 @@ App-owned settings, welcome and primary command labels switch immediately; OS di
 Current navigation is normalized text matching, not a Typst compiler source map. Whitespace, case and common ligatures are normalized while retaining original UTF-16 offsets. Search runs on a serial worker with cancellation and generation guards; ambiguous results do not jump. PDF page text is indexed lazily and cached per compilation session. Project source reads are limited to text-sized .typ files (4 MiB each).
 
 Validation for 0.1.7: an isolated, signed QA build was updated through a throttled localhost feed to a newer QA bundle. The editor remained usable during download, the ready banner appeared, canceling the save prompt kept the current process, and an approved restart replaced the bundle and launched the new version. Production app/preferences were not used for this installation test. A 180-page synthetic document took 72.4 ms on first text navigation and 11.5 ms with a warm index on the development machine; these are sample measurements, not universal guarantees.
+
+## 0.1.8 — Compiler source maps and WinUI 3 assessment
+
+Pinned Tinymist v0.15.10 at `45b50f0d928e825248fa1c2fcbcd68549e957b5d`, embedding Typst 0.15.1. The application uses LSP memory documents and `exportPdf` with `write:false`; preview control messages map source positions and frame coordinates. It does not embed a browser or the Tinymist web UI.
+
+Upstream `jump_from_cursor` only accepted Text/MathText leaves, ignored intra-span offsets and used numeric span proximity as a fallback. The small tracked patch accepts rendered math identifier spans, uses exact glyph offsets, applies frame transforms, and reports empty targets explicitly. The actual pinned Typst SourceLines API counts Unicode scalars; the older protocol comment claiming UTF-8 columns was verified against source and corrected in the Swift adapter.
+
+PDFs and positions come from the same long-lived compiler session. Source file switches keep three bounded sessions; inverse navigation to an included file keeps its originating entry and supplies unsaved edits through LSP memory documents. Stale UI navigation is rejected by revision and request generation.
+
+References:
+- https://github.com/Myriad-Dreamin/tinymist/blob/45b50f0d928e825248fa1c2fcbcd68549e957b5d/crates/tinymist-query/src/jump.rs
+- https://github.com/Myriad-Dreamin/tinymist/blob/45b50f0d928e825248fa1c2fcbcd68549e957b5d/crates/tinymist/src/tool/preview/compile.rs
+- https://github.com/Myriad-Dreamin/tinymist/blob/45b50f0d928e825248fa1c2fcbcd68549e957b5d/crates/tinymist/src/cmd/export.rs
+- `vendor/README.md` and `vendor/tinymist-source-map.patch` document the reproducible modifications.
+- `Windows-WinUI3-assessment.md` records the three requested reference repositories, candidate components and engineering estimate.
+
+Measured on the development machine with EMDoc: legacy watch cold 1758 ms, subsequent lightweight revisions 456/231/234 ms; Tinymist cold 1767 ms, subsequent revisions 144/141/134 ms. These are single-run observations, not universal benchmarks. The benchmark changes only in-memory source / private watch shadows, never the user's document files.
+
+Final native QA verified first-use formula forward navigation and a Command-click on a rotated integral opening chapter.typ while retaining main.typ’s two-page preview. The final EMDoc run measured watch cold 1699 ms, warm 409/225/220 ms; Tinymist cold 1773 ms, warm 133/131/132 ms. Full regression and source-map tests pass, including missing spans and cancellation of obsolete navigation.

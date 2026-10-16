@@ -1,0 +1,284 @@
+diff --git a/crates/tinymist-project/src/watch.rs b/crates/tinymist-project/src/watch.rs
+index f05415f..9d66bcb 100644
+--- a/crates/tinymist-project/src/watch.rs
++++ b/crates/tinymist-project/src/watch.rs
+@@ -196,6 +196,7 @@ pub struct NotifyActor<F: FnMut(FilesystemEvent)> {
+ 
+     /// The hold entries for watching, one entry for per file.
+     watched_entries: HashMap<ImmutPath, WatchedEntry>,
++    observed_metadata: HashMap<ImmutPath, Option<(std::time::SystemTime, u64)>>,
+ 
+     interrupted_by_events: F,
+ 
+@@ -230,6 +231,7 @@ impl<F: FnMut(FilesystemEvent) + Send + Sync> NotifyActor<F> {
+             undetermined_recv,
+ 
+             watched_entries: HashMap::new(),
++            observed_metadata: HashMap::new(),
+             watcher: watcher.map(|it| NotifyWatcher::System((it, watcher_rx))),
+         }
+     }
+@@ -254,6 +256,7 @@ impl<F: FnMut(FilesystemEvent) + Send + Sync> NotifyActor<F> {
+             undetermined_recv,
+ 
+             watched_entries: HashMap::new(),
++            observed_metadata: HashMap::new(),
+             watcher: Some(NotifyWatcher::Fake(FakeWatcher { commands })),
+         }
+     }
+@@ -327,6 +330,8 @@ impl<F: FnMut(FilesystemEvent) + Send + Sync> NotifyActor<F> {
+                     self.recheck_notify_event(event).await;
+                 }
+                 ActorEvent::PollMissing => {
++                    #[cfg(target_os = "macos")]
++                    self.poll_dependency_changes();
+                     self.poll_missing_watches();
+                 }
+             }
+@@ -443,6 +448,27 @@ impl<F: FnMut(FilesystemEvent) + Send + Sync> NotifyActor<F> {
+         }
+     }
+ 
++    // Typst Studio: FSEvents may miss quick/atomic per-file edits. Check only
++    // compiler dependencies, using full-resolution timestamps rather than
++    // notify PollWatcher's second-resolution mtime. Stable files are not read.
++    #[cfg(target_os = "macos")]
++    fn poll_dependency_changes(&mut self) {
++        self.observed_metadata.retain(|path, _| self.watched_entries.contains_key(path));
++        let paths: Vec<_> = self.watched_entries.iter()
++            .filter(|(_, entry)| entry.seen).map(|(path, _)| path.clone()).collect();
++        let mut changeset = FileChangeSet::default();
++        for path in paths {
++            let state = path.metadata().ok().and_then(|m| m.modified().ok().map(|t| (t, m.len())));
++            if self.observed_metadata.get(&path) != Some(&state) {
++                self.observed_metadata.insert(path.clone(), state);
++                changeset.may_insert(self.notify_entry_update(path));
++            }
++        }
++        if !changeset.is_empty() {
++            (self.interrupted_by_events)(FilesystemEvent::Update(changeset, false));
++        }
++    }
++
+     fn poll_missing_watches(&mut self) {
+         if self.watcher.is_none() {
+             return;
+diff --git a/crates/tinymist-query/src/jump.rs b/crates/tinymist-query/src/jump.rs
+index a46d225..c6ad9bb 100644
+--- a/crates/tinymist-query/src/jump.rs
++++ b/crates/tinymist-query/src/jump.rs
+@@ -35,9 +35,10 @@ pub fn jump_from_click(
+     for &(mut pos, ref item) in frame.items().rev() {
+         match item {
+             FrameItem::Group(group) => {
+-                // TODO: Handle transformation.
+-                if let Some(span) = jump_from_click(world, &group.frame, click - pos) {
+-                    return Some(span);
++                if let Some(inverse) = group.transform.invert() {
++                    if let Some(span) = jump_from_click(world, &group.frame, (click - pos).transform(inverse)) {
++                        return Some(span);
++                    }
+                 }
+             }
+ 
+@@ -73,10 +74,21 @@ pub fn jump_from_click(
+             }
+ 
+             FrameItem::Shape(shape, span) => {
+-                let Geometry::Rect(size) = shape.geometry else {
+-                    continue;
++                let hit = match &shape.geometry {
++                    Geometry::Rect(size) => is_in_rect(pos, *size, click),
++                    Geometry::Line(end) => {
++                        let p = click - pos;
++                        let (x, y, ex, ey) = (p.x.to_pt(), p.y.to_pt(), end.x.to_pt(), end.y.to_pt());
++                        let squared = ex * ex + ey * ey;
++                        let t = if squared > 0.0 { ((x * ex + y * ey) / squared).clamp(0.0, 1.0) } else { 0.0 };
++                        (x - t * ex).hypot(y - t * ey) <= 1.5
++                    }
++                    Geometry::Curve(curve) => {
++                        let rect = curve.bbox(shape.stroke.as_ref());
++                        is_in_rect(pos + rect.min, rect.size(), click)
++                    }
+                 };
+-                if is_in_rect(pos, size, click) {
++                if hit {
+                     let span = (*span).into();
+                     return Some((span, span));
+                 }
+@@ -105,104 +117,55 @@ fn jump_from_cursor_(
+     source: &Source,
+     cursor: usize,
+ ) -> Option<Vec<Position>> {
+-    // todo: leaf_at_compat only matches the text before the cursor, but we could
+-    // also match a text if it is after the cursor
+-    // The case `leaf_at_compat` will match: `Hello|`
+-    // FIXME: The case `leaf_at_compat` will not match: `|Hello`
+-    let node = LinkedNode::new(source.root()).leaf_at_compat(cursor)?;
+-    // todo: When we click on a label or some math operators, we seems likely also
+-    // be able to jump to some place.
+-    if !matches!(node.kind(), SyntaxKind::Text | SyntaxKind::MathText) {
+-        return None;
+-    };
+-
+-    let span = node.span();
+-    let offset = cursor.saturating_sub(node.offset());
+-
+-    // todo: The cursor may not exact hit at the start of some AST node. For
+-    // example, the cursor in the text element `Hell|o` is offset by 4 from the
+-    // node. It seems not pretty if we ignore the offset completely.
+-    let _ = offset;
+-
+-    match document {
+-        TypstDocument::Paged(paged_doc) => {
+-            // We checks whether there are any elements exactly matching the
+-            // cursor position.
+-            let mut positions = vec![];
+-
+-            // Unluckily, we might not be able to find the exact spans, so we
+-            // need to find the closest one at the same time.
+-            let mut min_page = 0;
+-            let mut min_point = Point::default();
+-            let mut min_dis = u64::MAX;
+-
+-            for (idx, page) in paged_doc.pages().iter().enumerate() {
+-                // In a page, we try to find a closer span than the existing found one.
+-                let mut p_dis = min_dis;
+-
+-                if let Some(point) = find_in_frame(&page.frame, span, &mut p_dis, &mut min_point)
+-                    && let Some(page) = NonZeroUsize::new(idx + 1)
+-                {
+-                    positions.push(Position { page, point });
+-                }
+-
+-                // In this page, we found a closer span and update.
+-                if p_dis != min_dis {
+-                    min_page = idx;
+-                    min_dis = p_dis;
+-                }
+-            }
+-
+-            // If we didn't find any exact span, we add the closest one in the same page.
+-            if positions.is_empty() && min_dis != u64::MAX {
+-                positions.push(Position {
+-                    page: NonZeroUsize::new(min_page + 1)?,
+-                    point: min_point,
+-                });
+-            }
+-
+-            Some(positions)
+-        }
+-        _ => None,
++    // Typst Studio: source spans include mathematical identifiers, not only
++    // text leaves. Resolve only rendered spans; never guess using numeric span IDs.
++    let lookup = source.text().get(cursor..).and_then(|s| s.chars().next())
++        .filter(|c| !c.is_whitespace()).map(|c| cursor + c.len_utf8()).unwrap_or(cursor);
++    let mut node = Some(LinkedNode::new(source.root()).leaf_at_compat(lookup)?);
++    let TypstDocument::Paged(doc) = document else { return None };
++    while let Some(current) = node {
++        let span = current.span();
++        let offset = cursor.saturating_sub(current.offset());
++        let positions: Vec<_> = doc.pages().iter().enumerate().filter_map(|(index, page)| {
++            find_in_frame(&page.frame, span, offset).map(|point| Position {
++                page: NonZeroUsize::new(index + 1).unwrap(), point,
++            })
++        }).collect();
++        if !positions.is_empty() { return Some(positions); }
++        // A math function's rendered radical/fraction belongs to its call span.
++        node = current.parent().cloned();
+     }
+-}
++    Some(vec![])
+ 
+-/// Finds the position of a span in a frame.
+-fn find_in_frame(frame: &Frame, span: Span, min_dis: &mut u64, res: &mut Point) -> Option<Point> {
+-    for &(mut pos, ref item) in frame.items() {
+-        if let FrameItem::Group(group) = item {
+-            // TODO: Handle transformation.
+-            if let Some(point) = find_in_frame(&group.frame, span, min_dis, res) {
+-                return Some(point + pos);
+-            }
+-        }
++}
+ 
+-        if let FrameItem::Text(text) = item {
+-            for glyph in &text.glyphs {
+-                if glyph.span.0 == span {
+-                    return Some(pos);
++/// Find the exact compiler span and its glyph offset, including math symbols.
++fn find_in_frame(frame: &Frame, span: Span, offset: usize) -> Option<Point> {
++    for &(pos, ref item) in frame.items() {
++        match item {
++            FrameItem::Group(group) => {
++                if let Some(point) = find_in_frame(&group.frame, span, offset) {
++                    return Some(point.transform(group.transform) + pos);
+                 }
+-
+-                // We at least require that the span is in the same file.
+-                let is_same_file = glyph.span.0.id() == span.id();
+-                if is_same_file {
+-                    // The numbers are not offsets but a unique id on the AST tree which are
+-                    // nicely divided.
+-                    // FIXME: since typst v0.13.0, the numbers are not only the ids, but also raw
+-                    // ranges, See [`Span::range`].
+-                    let glyph_num = glyph.span.0.into_raw();
+-                    let span_num = span.into_raw().get();
+-                    let dis = glyph_num.get().abs_diff(span_num);
+-                    if dis < *min_dis {
+-                        *min_dis = dis;
+-                        *res = pos;
++            }
++            FrameItem::Text(text) => {
++                let mut point = pos;
++                let mut matched = None;
++                for glyph in &text.glyphs {
++                    if glyph.span.0 == span {
++                        if matched.is_none() || (glyph.span.1 as usize) <= offset {
++                            matched = Some(point);
++                        }
++                        if (glyph.span.1 as usize) >= offset { break; }
+                     }
++                    point.x += glyph.x_advance.at(text.size);
+                 }
+-                pos.x += glyph.x_advance.at(text.size);
++                if matched.is_some() { return matched; }
+             }
++            FrameItem::Shape(_, item_span) | FrameItem::Image(_, _, item_span) if *item_span == span => return Some(pos),
++            _ => {}
+         }
+     }
+-
+     None
+ }
+ 
+diff --git a/crates/typst-preview/src/actor/render.rs b/crates/typst-preview/src/actor/render.rs
+index 033b6f2..12ca7e3 100644
+--- a/crates/typst-preview/src/actor/render.rs
++++ b/crates/typst-preview/src/actor/render.rs
+@@ -80,8 +80,12 @@ impl RenderActor {
+ 
+                 log::debug!("RenderActor: resolved WebviewResolveFrameLoc: {spans:?}");
+                 // end position is used
+-                if let Some(spans) = spans {
+-                    self.editor_resolve_span_range(spans.0..spans.1);
++                let resolved = spans.and_then(|spans| self.editor_resolve_span_range(spans.0..spans.1));
++                if resolved.is_none() {
++                    // Typst Studio: explicit empty result, so native clients do not wait for a timeout.
++                    let _ = self.editor_conn_sender.send(EditorActorRequest::DocToSrcJump(DocToSrcJumpInfo {
++                        filepath: String::new(), start: None, end: None,
++                    }));
+                 }
+             }
+             RenderActorRequest::ResolveSourceLoc(req) => {
+@@ -249,10 +253,7 @@ impl RenderActor {
+                 },
+             }));
+ 
+-        if info.is_empty() {
+-            return None;
+-        }
+-
++        // An empty jump is a valid no-target response for native clients.
+         let _ = self.webview_sender.send(WebviewActorRequest::SrcToDocJump(
+             info.into_iter()
+                 .map(|info| DocumentPosition {

@@ -5,13 +5,11 @@ import UniformTypeIdentifiers
 
 struct OutlineItem: Identifiable { let id: Int; let title: String }
 @MainActor private final class DocumentSession {
-    let compiler = WatchCompiler()
+    let compiler = TinymistCompiler()
     var source = ""
     var revision = -1
     var pdf: PDFDocument?
-    var pdfData: Data?
-    var pdfGeneration = UUID()
-    let navigationIndex = PDFNavigationIndex()
+    var entryURL: URL?
     var diagnostics = ""
     var success = false
     var elapsed = 0.0
@@ -38,8 +36,8 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     @Published var jumpLine: Int?
     @Published var jumpRange: NSRange?
     @Published var navigationStatus = ""
-    private let navigationQueue = DispatchQueue(label: "studio.navigation", qos: .userInitiated)
-    private var navigationCancellation: CompileCancellation?
+    private var pinnedSessionKey: String?
+    private var navigationSerial = UUID()
     private var navigationDebounce: DispatchWorkItem?
     @Published var sidebar = true
     @Published var showSymbols = false
@@ -123,10 +121,11 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         }
     }
     var errorLine: Int? {
-        guard let re = try? NSRegularExpression(pattern: #"(?:<stdin>|-):(\d+):(\d+):"#), let m = re.firstMatch(in: diagnostics, range: NSRange(diagnostics.startIndex..., in: diagnostics)), let r = Range(m.range(at: 1), in: diagnostics) else { return nil }
+        let path = NSRegularExpression.escapedPattern(for: fileURL?.path ?? (projectURL ?? FileManager.default.temporaryDirectory).appendingPathComponent(".typst-studio-untitled.typ").path)
+        guard let re = try? NSRegularExpression(pattern: "(?:" + path + #"|<stdin>|-):(\d+):(\d+):"#), let m = re.firstMatch(in: diagnostics, range: NSRange(diagnostics.startIndex..., in: diagnostics)), let r = Range(m.range(at: 1), in: diagnostics) else { return nil }
         return Int(diagnostics[r])
     }
-    func changed(_ value: String) { navigationCancellation?.cancel(); text = value; dirty = text != lastSavedText; revision += 1; scheduleCompile() }
+    func changed(_ value: String) { navigationSerial = UUID(); navigationStatus = ""; text = value; dirty = text != lastSavedText; revision += 1; scheduleCompile() }
     func persistRecovery() {
         let value = Recovery(text: text, path: fileURL?.path, project: projectURL?.path, dirty: dirty), url = recoveryURL
         recoveryQueue.async { if let data = try? JSONEncoder().encode(value) { try? data.write(to: url, options: .atomic) } }
@@ -137,7 +136,9 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         debounce = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
     }
-    var previewDocumentKey: String { documentKey }
+    private var activeSessionKey: String { pinnedSessionKey ?? documentKey }
+    var previewDocumentKey: String { activeSessionKey }
+    var pinnedPreviewName: String? { pinnedSessionKey.flatMap { sessions[$0]?.entryURL?.lastPathComponent } }
     func rememberPreview(_ position: PreviewPosition, for key: String) { sessions[key]?.previewPosition = position }
     func previewPosition(for key: String) -> PreviewPosition? { sessions[key]?.previewPosition }
     private func capturePreview() {
@@ -159,31 +160,37 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         return created
     }
     func shutdownCompiler() {
-        debounce?.cancel(); navigationDebounce?.cancel(); navigationCancellation?.cancel()
+        debounce?.cancel(); navigationDebounce?.cancel(); navigationSerial = UUID()
         for session in sessions.values { session.compiler.shutdown() }
-        sessions.removeAll(); sessionOrder.removeAll()
+        sessions.removeAll(); sessionOrder.removeAll(); pinnedSessionKey = nil
     }
     func compile() {
         guard !showWelcome else { return }
         compiling = true; status = pdf == nil ? "Typesetting…" : "Updating preview…"
-        let key = documentKey, session = session(for: documentKey)
-        session.source = text; session.revision = revision
+        let key = activeSessionKey, session = session(for: activeSessionKey)
+        if pinnedSessionKey == nil { session.source = text; session.entryURL = fileURL }
+        session.revision = revision
         let directory = fileURL?.deletingLastPathComponent() ?? projectURL ?? FileManager.default.temporaryDirectory
-        session.compiler.submit(.init(source: text, directory: directory, root: projectURL ?? directory,
-                              document: fileURL?.path ?? "untitled", revision: revision) { [weak self, weak session] version, result in
-            let document = result.fromCache ? nil : result.pdf.flatMap { PDFDocument(data: $0) }
+        let completion: (Int, CompileResult) -> Void = { [weak self, weak session] version, result in
+            let document = result.pdf.flatMap { PDFDocument(data: $0) }
             DispatchQueue.main.async {
                 guard let self, let session, self.sessions[key] === session, session.revision == version else { return }
-                if let document { session.pdf = document; session.pdfData = result.pdf; session.pdfGeneration = UUID() }
+                if let document, !result.fromCache || session.pdf == nil { session.pdf = document }
                 session.diagnostics = result.diagnostics; session.success = result.success; session.elapsed = result.elapsed
-                guard self.documentKey == key, self.revision == version, !self.showWelcome else { return }
+                guard self.activeSessionKey == key, self.revision == version, !self.showWelcome else { return }
                 self.compiling = false; self.elapsed = session.elapsed; self.diagnostics = session.diagnostics
                 self.pdf = session.pdf
                 if session.success, session.pdf != nil {
                     self.successfulRevision = version; self.status = "Preview up to date"
                 } else { self.successfulRevision = -1; self.status = "Compilation failed · last successful preview"; self.showDiagnostics = true }
             }
-        })
+        }
+        if pinnedSessionKey != nil, let fileURL {
+            session.compiler.updateIncludedFile(fileURL, source: text, revision: revision, completion: completion)
+        } else {
+            session.compiler.submit(.init(source: text, directory: directory, root: projectURL ?? directory,
+                document: fileURL?.path ?? "untitled", revision: revision, completion: completion))
+        }
     }
     private var updateRestartApproved = false
     func prepareForUpdateRestart() -> Bool {
@@ -208,7 +215,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         catch { report(error.localizedDescription) }
     }
     func newDocument() {
-        guard confirmDiscard() else { return }; showWelcome = false; fileURL = nil; text = "= Untitled\n\nStart writing here.\n"; lastSavedText = ""; dirty = true; revision += 1
+        guard confirmDiscard() else { return }; if let pinnedSessionKey { sessions[pinnedSessionKey]?.compiler.closeIncludedFiles() }; pinnedSessionKey = nil; showWelcome = false; fileURL = nil; text = "= Untitled\n\nStart writing here.\n"; lastSavedText = ""; dirty = true; revision += 1
         editor?.undoManager?.removeAllActions(); persistRecovery(); scheduleCompile()
     }
     func openPanel(folder: Bool = false) {
@@ -228,17 +235,21 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         showWelcome = false; expandedDirectories = []; rememberProject(url)
         refreshFiles(selectMain: true)
     }
-    func openFile(_ url: URL) {
+    func openFile(_ url: URL, preservingPreview: Bool = false) {
         let url = url.standardizedFileURL.resolvingSymlinksInPath()
         if url.pathExtension != "typ" { assetURL = url; return }
         guard fileURL != url, confirmDiscard() else { return }
-        capturePreview(); navigationCancellation?.cancel(); navigationDebounce?.cancel(); jumpRange = nil; navigationStatus = ""
+        capturePreview();
+        let previousKey = activeSessionKey
+        if !preservingPreview, let pinnedSessionKey { sessions[pinnedSessionKey]?.compiler.closeIncludedFiles() }
+        navigationSerial = UUID(); navigationDebounce?.cancel(); jumpRange = nil; navigationStatus = ""
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
             showWelcome = false; fileURL = url; text = content; jumpLine = 1; lastSavedText = content; dirty = false
             if projectURL == nil || !url.path.hasPrefix(projectURL!.path + "/") { projectURL = url.deletingLastPathComponent() }
             revision += 1
-            let cached = session(for: documentKey)
+            pinnedSessionKey = preservingPreview ? previousKey : nil
+            let cached = session(for: activeSessionKey)
             pdf = cached.pdf; diagnostics = cached.source == content ? cached.diagnostics : ""
             successfulRevision = -1; compiling = true
             status = cached.pdf == nil ? "Typesetting…" : "Restoring preview…"
@@ -312,52 +323,59 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         }
     }
     func jumpToPDF(quiet: Bool = false) {
-        guard let session = sessions[documentKey], let data = session.pdfData, let document = pdf else {
-            if !quiet { navigationStatus = "Compile the document before navigating." }; return
+        guard let session = sessions[activeSessionKey], pdf != nil, successfulRevision == revision, !compiling else {
+            if !quiet { navigationStatus = "Wait for compilation to finish, then try again." }; return
         }
-        let identity = ObjectIdentifier(document), index = session.navigationIndex, generation = session.pdfGeneration
-        let source = text as NSString
-        let selected = editor?.selectedRange() ?? NSRange(location: 0, length: 0)
-        let safe = NSRange(location: min(selected.location, source.length), length: min(selected.length, max(0, source.length - selected.location)))
-        let range = safe.length > 0 ? safe : source.lineRange(for: safe)
-        let phrase = source.substring(with: range)
-        guard phrase.utf16.count <= 4096, NavigationText(phrase).normalized.count >= 3 else { if !quiet { navigationStatus = "Select at least three text characters." }; return }
-        let cancellation = CompileCancellation(); navigationCancellation?.cancel(); navigationCancellation = cancellation
-        let key = documentKey, version = revision
+        let range = editor?.selectedRange() ?? NSRange(location: 0, length: 0)
+        let position = SourceCoordinates.position(in: text, utf16Offset: range.location)
+        let file = fileURL ?? (projectURL ?? FileManager.default.temporaryDirectory).appendingPathComponent(".typst-studio-untitled.typ")
+        let key = activeSessionKey, version = revision, serial = UUID(); navigationSerial = serial
         if !quiet { navigationStatus = "Finding PDF location…" }
-        navigationQueue.async { [weak self] in
-            let matches = index.matches(data: data, generation: generation, phrase: phrase, cancelled: { cancellation.isCancelled })
+        session.compiler.forward(file: file, line: position.line, column: position.column) { [weak self] result in
             DispatchQueue.main.async {
-                guard let self, !cancellation.isCancelled, self.documentKey == key, self.revision == version, let document = self.pdf, ObjectIdentifier(document) == identity else { return }
-                guard matches.count == 1, let match = matches.first, let selection = document.page(at: match.page)?.selection(for: match.range) else {
-                    if !quiet { self.navigationStatus = matches.isEmpty ? "No text match. Try selecting a distinctive phrase." : "Multiple matches. Select a longer phrase." }; return
+                guard let self, self.navigationSerial == serial, self.revision == version, let document = self.pdf, self.activeSessionKey == key else { return }
+                if case .failure(let error) = result { if !quiet { self.navigationStatus = error.localizedDescription }; return }
+                guard case .success(.document(let positions)) = result, !positions.isEmpty else {
+                    if !quiet { self.navigationStatus = "No rendered position for this source." }; return
                 }
-                self.preview?.setCurrentSelection(selection, animate: true); self.preview?.go(to: selection)
+                let currentPage = self.preview?.currentPage.flatMap { document.index(for: $0) } ?? 0
+                guard let position = positions.min(by: { abs($0.page - 1 - currentPage) < abs($1.page - 1 - currentPage) }), let page = document.page(at: position.page - 1) else { return }
+                let bounds = page.bounds(for: .mediaBox)
+                let point = CGPoint(x: bounds.minX + position.x, y: bounds.maxY - position.y)
+                self.preview?.go(to: CGRect(x: point.x - 12, y: point.y - 12, width: 24, height: 24), on: page)
+                (self.preview as? StudioPDFView)?.highlightSourcePoint(point, on: page)
                 self.navigationStatus = "PDF location found"
             }
         }
     }
-    func jumpFromPDF(_ phrase: String) {
-        guard phrase.utf16.count <= 4096, NavigationText(phrase).normalized.count >= 3 else { navigationStatus = "Select at least three text characters."; return }
-        let cancellation = CompileCancellation(); navigationCancellation?.cancel(); navigationCancellation = cancellation
-        let key = documentKey, version = revision, source = text, current = fileURL, projectFiles = files
-        navigationStatus = "Finding source location…"
-        navigationQueue.async { [weak self] in
-            let matches = TextNavigation.sourceMatches(phrase: phrase, current: source, currentURL: current, files: projectFiles, cancelled: { cancellation.isCancelled })
+    func jumpFromPDF(page: PDFPage, point: CGPoint) {
+        guard let session = sessions[activeSessionKey], let pdf, successfulRevision == revision, !compiling else { navigationStatus = "Wait for compilation to finish, then try again."; return }
+        let pageIndex = pdf.index(for: page)
+        guard pageIndex != NSNotFound else { return }
+        let bounds = page.bounds(for: .mediaBox), version = revision, serial = UUID()
+        navigationSerial = serial; navigationStatus = "Finding source location…"
+        session.compiler.inverse(page: pageIndex + 1, x: point.x - bounds.minX, y: bounds.maxY - point.y) { [weak self] result in
             DispatchQueue.main.async {
-                guard let self, !cancellation.isCancelled, self.documentKey == key, self.revision == version else { return }
-                guard matches.count == 1, let match = matches.first else {
-                    self.navigationStatus = matches.isEmpty ? "No text match. Try selecting a distinctive phrase." : "Multiple matches. Select a longer phrase."; return
+                guard let self, self.navigationSerial == serial, self.revision == version else { return }
+                if case .failure(let error) = result { self.navigationStatus = error.localizedDescription; return }
+                guard case .success(.source(let location)) = result else { return }
+                let target = location.url.standardizedFileURL
+                // Package sources can be navigated to, but never silently leave the project.
+                guard let root = self.projectURL, target.path.hasPrefix(root.path + "/") || target == self.fileURL else {
+                    self.navigationStatus = "Source belongs to an external package."; return
                 }
-                if let target = match.url, target != self.fileURL {
-                    self.openFile(target)
-                    guard self.fileURL == target else { return } // Save/Discard may have been cancelled.
+                if target != self.fileURL {
+                    self.openFile(target, preservingPreview: true)
+                    guard self.fileURL == target else { return }
                 }
-                guard self.text == match.source else { self.navigationStatus = "Source changed. Try navigating again."; return }
-                self.jumpLine = nil; self.jumpRange = match.range
-                self.navigationStatus = "Source location found"
+                guard let range = SourceCoordinates.range(in: self.text, start: location.start, end: location.end) else { self.navigationStatus = "Source changed. Try navigating again."; return }
+                self.jumpLine = nil; self.jumpRange = range; self.navigationStatus = "Source location found"
             }
         }
+    }
+    func jumpFromSelectedPDF() {
+        guard let view = preview as? StudioPDFView else { return }
+        view.showSelectedSource()
     }
     static let sample = """
     #set page(paper: "a4", margin: (x: 24mm, y: 24mm))

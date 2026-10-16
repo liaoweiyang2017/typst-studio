@@ -79,9 +79,24 @@ final class StudioPDFView: PDFView {
         let pageWidth = page.bounds(for: displayBox).width
         if pageWidth > 0 { scaleFactor = max(0.1, (bounds.width - 24) / pageWidth) }
     }
-    var clickedText: ((String) -> Void)?
+    var clickedPosition: ((PDFPage, CGPoint) -> Void)?
     var navigationTitle = "Show in Source"
-    @objc func showSelectedSource() { activated?(); if let text = currentSelection?.string { clickedText?(text) } }
+    @objc func showSelectedSource() {
+        activated?()
+        guard let selection = currentSelection, let page = selection.pages.first else { return }
+        let rect = selection.selectionsByLine().first?.bounds(for: page) ?? selection.bounds(for: page)
+        clickedPosition?(page, CGPoint(x: rect.minX + min(2, rect.width / 2), y: rect.midY))
+    }
+    private var sourceMarker: NSView?
+    func highlightSourcePoint(_ point: CGPoint, on page: PDFPage) {
+        sourceMarker?.removeFromSuperview()
+        let target = convert(point, from: page)
+        let marker = NSView(frame: CGRect(x: target.x - 10, y: target.y - 10, width: 20, height: 20))
+        marker.wantsLayer = true; marker.layer?.borderColor = NSColor.systemBlue.cgColor
+        marker.layer?.borderWidth = 2; marker.layer?.cornerRadius = 10
+        addSubview(marker); sourceMarker = marker
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak marker] in marker?.removeFromSuperview() }
+    }
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = super.menu(for: event) ?? NSMenu()
         menu.addItem(.separator())
@@ -93,7 +108,7 @@ final class StudioPDFView: PDFView {
         activated?(); super.mouseDown(with: event)
         guard event.modifierFlags.contains(.command) else { return }
         let point = convert(event.locationInWindow, from: nil)
-        if let page = page(for: point, nearest: true), let line = page.selectionForLine(at: convert(point, to: page))?.string { clickedText?(line) }
+        if let page = page(for: point, nearest: true) { clickedPosition?(page, convert(point, to: page)) }
     }
 }
 @MainActor final class PreviewControls: ObservableObject {
@@ -114,7 +129,7 @@ struct PDFCanvas: NSViewRepresentable {
     func makeNSView(context: Context) -> StudioPDFView {
         let view = StudioPDFView(); view.autoScales = false; view.displayMode = .singlePageContinuous; view.displayDirection = .vertical
         view.backgroundColor = NSColor(calibratedWhite: 0.95, alpha: 1); view.pageShadowsEnabled = false
-        view.clickedText = { model.jumpFromPDF($0) }
+        view.clickedPosition = { model.jumpFromPDF(page: $0, point: $1) }
         view.activated = { [weak view] in model.preview = view }
         if primary || model.preview == nil { model.preview = view }; controls.view = view
         view.navigationTitle = model.tr("Show in Source")
@@ -177,6 +192,7 @@ struct PreviewPane: View {
                 Button { model.exportPDF() } label: { Image(systemName: "arrow.down") }.help("Export PDF").disabled(model.successfulRevision != model.revision)
             }.font(.system(size: 11)).buttonStyle(.borderless).padding(.horizontal, 10).frame(height: 29).background(Color(nsColor: .textBackgroundColor))
             Divider()
+            if let entry = model.pinnedPreviewName { Text(model.tr("Preview entry") + ": " + entry).font(.caption).foregroundStyle(.secondary).padding(.vertical, 3) }
             if !model.navigationStatus.isEmpty {
                 HStack {
                     Text(model.tr(model.navigationStatus)).font(.caption).foregroundStyle(.secondary)

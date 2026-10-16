@@ -12,7 +12,7 @@ import PDFKit
                 if model.showWelcome { WelcomeView(model: model) }
                 else { StudioView(model: model) }
             }
-                .onAppear { delegate.model = model; updates.prepareToRestart = { [weak model] in model?.prepareForUpdateRestart() ?? false }; NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true); Task { await updates.checkAtLaunch() } }
+                .onAppear { delegate.model = model; updates.prepareToRestart = { [weak model = model] in model?.prepareForUpdateRestart() ?? false }; NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true); Task { await updates.checkAtLaunch() } }
                 .sheet(isPresented: $model.showSettings) { SettingsView(model: model).environmentObject(updates) }
                 .safeAreaInset(edge: .bottom) {
                     if updates.showBanner { UpdateBanner(model: model, updates: updates) }
@@ -40,11 +40,11 @@ import PDFKit
             CommandGroup(replacing: .appSettings) { Button(model.tr("Settings…")) { model.showSettings = true }.keyboardShortcut(",") }
             CommandMenu(model.tr("Typeset")) {
                 Button(model.tr("Show in PDF")) { model.jumpToPDF() }.keyboardShortcut("j", modifiers: [.command, .shift])
-                Button(model.tr("Show in Source")) { if let phrase = model.preview?.currentSelection?.string { model.jumpFromPDF(phrase) } }.keyboardShortcut("j", modifiers: [.command, .option])
+                Button(model.tr("Show in Source")) { model.jumpFromSelectedPDF() }.keyboardShortcut("j", modifiers: [.command, .option])
                 Button(model.tr("Compile")) { model.compile() }.keyboardShortcut("b")
                 Button(model.tr("Symbols")) { model.showSymbols = true }.keyboardShortcut("m", modifiers: [.command, .shift])
                 Button(model.tr("Pop Out Preview")) { model.popOut() }
-                Toggle(model.tr("Follow Cursor (Text Match)"), isOn: $model.followCursor)
+                Toggle(model.tr("Follow Cursor (Source Map)"), isOn: $model.followCursor)
             }
             CommandGroup(after: .textEditing) {
                 Button(model.tr("Find…")) {

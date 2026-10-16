@@ -53,10 +53,10 @@ final class FeedProtocol: URLProtocol, @unchecked Sendable {
         precondition(checker.available == nil && checker.showResult)
         print("PASS: semantic versions, allowlisted URLs, startup once, newer/no downgrade, HTTP and malformed-feed recovery")
         if ProcessInfo.processInfo.environment["STUDIO_LIVE_UPDATE_TEST"] == "1" {
-            let live = UpdateChecker(currentVersion: "0.1.6")
+            let live = UpdateChecker(currentVersion: "0.1.7")
             await live.check(manual: false)
-            precondition(live.available?.version == "0.1.7", live.status)
-            print("PASS: anonymous public update feed reports 0.1.7 to 0.1.6")
+            precondition(live.available?.version == "0.1.8", live.status)
+            print("PASS: anonymous public update feed reports 0.1.8 to 0.1.7")
         }
     }
 }

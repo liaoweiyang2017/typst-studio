@@ -83,8 +83,8 @@ struct SettingsView: View {
                 Text(model.tr("Preview colors only. Exported PDFs keep their original colors.")).font(.caption).foregroundStyle(.secondary)
             }
             Section(model.tr("Navigation")) {
-                Toggle(model.tr("Preview follows cursor (text matching)"), isOn: $model.followCursor)
-                Text(model.tr("Select text and use Show in PDF (⇧⌘J) or Show in Source (⌥⌘J). You can also ⌘-click a text line. Text matching cannot precisely locate formulas or generated content.")).font(.caption).foregroundStyle(.secondary)
+                Toggle(model.tr("Preview follows cursor (source map)"), isOn: $model.followCursor)
+                Text(model.tr("Source maps locate formulas and included files. Use ⇧⌘J from source, ⌥⌘J from selected PDF text, or ⌘-click a PDF glyph. Unrendered code has no page position.")).font(.caption).foregroundStyle(.secondary)
             }
         }
     }
