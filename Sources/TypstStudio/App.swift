@@ -149,7 +149,7 @@ struct StudioView: View {
                 ProjectSearchPane(model: model)
             } else if section == 2 {
                 ScrollView {
-                    if let root = model.pdf?.outlineRoot { PDFOutlineRows(node: root, model: model).padding(.horizontal, 10) }
+                    if let root = model.pdf?.outlineRoot { PDFOutlineRows(node: root, model: model).id(model.fileURL?.path ?? "untitled").padding(.horizontal, 10) }
                     else { VStack(alignment: .leading) { ForEach(model.outline) { item in Button(item.title) { model.goToLine(item.id) }.buttonStyle(.plain).padding(6) } }.padding(10) }
                 }
             } else if section == 3 {
@@ -167,7 +167,7 @@ struct StudioView: View {
                     }.padding(14) }
                 }
             }
-        }.background(Color(nsColor: .windowBackgroundColor))
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(nsColor: .windowBackgroundColor))
     }
     func formatButton(_ icon: String, _ title: String, _ prefix: String, _ suffix: String) -> some View {
         Button { model.wrapSelection(prefix, suffix) } label: { Image(systemName: icon) }.help(title)
@@ -226,19 +226,28 @@ struct ProjectBranch: View {
 }
 struct PDFOutlineRows: View {
     let node: PDFOutline
-    @ObservedObject var model: StudioModel
+    let model: StudioModel
     var body: some View {
-        ForEach(0..<node.numberOfChildren, id: \.self) { i in
-            if let child = node.child(at: i) {
-                if child.numberOfChildren > 0 {
-                    DisclosureGroup { PDFOutlineRows(node: child, model: model) } label: {
-                        Button(child.label ?? "Heading") { if let dest = child.destination { model.preview?.go(to: dest) } }.buttonStyle(.plain).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    }.padding(.vertical, 3)
-                } else {
-                    Button(child.label ?? "Heading") { if let dest = child.destination { model.preview?.go(to: dest) } }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).padding(.vertical, 4).frame(maxWidth: .infinity, alignment: .leading)
-                }
+        LazyVStack(alignment: .leading, spacing: 1) {
+            ForEach(0..<node.numberOfChildren, id: \.self) { i in
+                if let child = node.child(at: i) { PDFOutlineRow(node: child, model: model) }
             }
-        }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+struct PDFOutlineRow: View {
+    let node: PDFOutline
+    let model: StudioModel
+    @State private var expanded = true
+    var title: some View {
+        Button(node.label ?? "Heading") { if let dest = node.destination { model.preview?.go(to: dest) } }
+            .buttonStyle(.plain).font(.system(size: 12, weight: node.numberOfChildren > 0 ? .medium : .regular))
+            .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+    }
+    var body: some View {
+        if node.numberOfChildren > 0 {
+            DisclosureGroup(isExpanded: $expanded) { PDFOutlineRows(node: node, model: model) } label: { title }.padding(.vertical, 3)
+        } else { title.foregroundStyle(.secondary).padding(.vertical, 4) }
     }
 }
 struct SymbolsView: View {

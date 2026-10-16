@@ -4,6 +4,15 @@ import PDFKit
 import UniformTypeIdentifiers
 
 struct OutlineItem: Identifiable { let id: Int; let title: String }
+@MainActor private final class DocumentSession {
+    let compiler = WatchCompiler()
+    var source = ""
+    var revision = -1
+    var pdf: PDFDocument?
+    var diagnostics = ""
+    var success = false
+    var elapsed = 0.0
+}
 @MainActor final class StudioModel: ObservableObject {
     @Published var text = ""
     @Published var showWelcome = true
@@ -39,16 +48,19 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     weak var editor: NSTextView?
     weak var preview: PDFView?
     private var debounce: DispatchWorkItem?
-    private let compiler = WatchCompiler()
+    private var sessions: [String: DocumentSession] = [:]
+    private var sessionOrder: [String] = []
     private let recoveryQueue = DispatchQueue(label: "studio.recovery", qos: .utility)
     private var previewWindow: NSWindow?
     private var lastSavedText = ""
     private let recoveryURL: URL
     private let persistsRecentProjects: Bool
     private var pendingRecovery: Recovery?
-    struct Recovery: Codable { let text: String; let path: String?; let project: String? }
+    struct Recovery: Codable { let text: String; let path: String?; let project: String?; var dirty: Bool? = nil }
     init(recoveryLocation: URL? = nil) {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("TypstStudio")
+        let bundleID = Bundle.main.bundleIdentifier ?? "app.typststudio.mac"
+        let supportName = bundleID == "app.typststudio.mac" ? "TypstStudio" : bundleID
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(supportName)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         persistsRecentProjects = recoveryLocation == nil
         recoveryURL = recoveryLocation ?? dir.appendingPathComponent("Recovery.json")
@@ -57,8 +69,8 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         theme = defaults.string(forKey: "theme") ?? "System"
         if let data = try? Data(contentsOf: recoveryURL), let r = try? JSONDecoder().decode(Recovery.self, from: data) {
             pendingRecovery = r
-            let saved = r.path.flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
-            hasRecovery = !r.text.isEmpty && r.text != saved
+            // Showing Welcome must not open a possibly remote/unavailable document.
+            hasRecovery = !r.text.isEmpty && (r.dirty ?? true)
         }
     }
     func restoreDraft() {
@@ -96,7 +108,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     }
     func changed(_ value: String) { text = value; dirty = text != lastSavedText; revision += 1; scheduleCompile() }
     func persistRecovery() {
-        let value = Recovery(text: text, path: fileURL?.path, project: projectURL?.path), url = recoveryURL
+        let value = Recovery(text: text, path: fileURL?.path, project: projectURL?.path, dirty: dirty), url = recoveryURL
         recoveryQueue.async { if let data = try? JSONEncoder().encode(value) { try? data.write(to: url, options: .atomic) } }
     }
     func scheduleCompile() {
@@ -105,21 +117,44 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         debounce = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
     }
-    func shutdownCompiler() { debounce?.cancel(); compiler.shutdown() }
+    private var documentKey: String { (projectURL?.path ?? "") + "|" + (fileURL?.path ?? "untitled") }
+    private func session(for key: String) -> DocumentSession {
+        sessionOrder.removeAll { $0 == key }; sessionOrder.append(key)
+        if let existing = sessions[key] { return existing }
+        let created = DocumentSession(); sessions[key] = created
+        while sessionOrder.count > 3 {
+            let oldest = sessionOrder.removeFirst()
+            if let removed = sessions.removeValue(forKey: oldest) {
+                let engine = removed.compiler
+                DispatchQueue.global(qos: .utility).async { engine.shutdown() }
+            }
+        }
+        return created
+    }
+    func shutdownCompiler() {
+        debounce?.cancel()
+        for session in sessions.values { session.compiler.shutdown() }
+        sessions.removeAll(); sessionOrder.removeAll()
+    }
     func compile() {
         guard !showWelcome else { return }
-        compiling = true; status = "Typesetting…"
+        compiling = true; status = pdf == nil ? "Typesetting…" : "Updating preview…"
+        let key = documentKey, session = session(for: documentKey)
+        session.source = text; session.revision = revision
         let directory = fileURL?.deletingLastPathComponent() ?? projectURL ?? FileManager.default.temporaryDirectory
-        compiler.submit(.init(source: text, directory: directory, root: projectURL ?? directory,
-                              document: fileURL?.path ?? "untitled", revision: revision) { [weak self] version, result in
-            // Decode off the UI thread; PDFKit displays the completed document on main.
-            let document = result.pdf.flatMap { PDFDocument(data: $0) }
+        session.compiler.submit(.init(source: text, directory: directory, root: projectURL ?? directory,
+                              document: fileURL?.path ?? "untitled", revision: revision) { [weak self, weak session] version, result in
+            let document = result.fromCache ? nil : result.pdf.flatMap { PDFDocument(data: $0) }
             DispatchQueue.main.async {
-                guard let self, self.revision == version, !self.showWelcome else { return }
-                self.compiling = false; self.elapsed = result.elapsed; self.diagnostics = result.diagnostics
-                if result.success, let document {
-                    self.pdf = document; self.successfulRevision = version; self.status = "Preview up to date"
-                } else { self.status = "Compilation failed · last successful preview"; self.showDiagnostics = true }
+                guard let self, let session, self.sessions[key] === session, session.revision == version else { return }
+                if let document { session.pdf = document }
+                session.diagnostics = result.diagnostics; session.success = result.success; session.elapsed = result.elapsed
+                guard self.documentKey == key, self.revision == version, !self.showWelcome else { return }
+                self.compiling = false; self.elapsed = session.elapsed; self.diagnostics = session.diagnostics
+                self.pdf = session.pdf
+                if session.success, session.pdf != nil {
+                    self.successfulRevision = version; self.status = "Preview up to date"
+                } else { self.successfulRevision = -1; self.status = "Compilation failed · last successful preview"; self.showDiagnostics = true }
             }
         })
     }
@@ -153,6 +188,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     func openProject(_ url: URL) {
         let url = url.standardizedFileURL.resolvingSymlinksInPath()
         guard confirmDiscard() else { return }
+        if projectURL != url { shutdownCompiler() }
         projectURL = url; files = []; fileURL = nil; text = ""; lastSavedText = ""; dirty = false
         pdf = nil; diagnostics = ""; revision += 1; successfulRevision = -1
         showWelcome = false; expandedDirectories = []; rememberProject(url)
@@ -166,7 +202,12 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
             let content = try String(contentsOf: url, encoding: .utf8)
             showWelcome = false; fileURL = url; text = content; jumpLine = 1; lastSavedText = content; dirty = false
             if projectURL == nil || !url.path.hasPrefix(projectURL!.path + "/") { projectURL = url.deletingLastPathComponent() }
-            revision += 1; pdf = nil; editor?.undoManager?.removeAllActions(); expandToFile(); if let projectURL { rememberProject(projectURL) }; if files.isEmpty { refreshFiles() }; persistRecovery(); scheduleCompile()
+            revision += 1
+            let cached = session(for: documentKey)
+            pdf = cached.pdf; diagnostics = cached.source == content ? cached.diagnostics : ""
+            successfulRevision = -1; compiling = true
+            status = cached.pdf == nil ? "Typesetting…" : "Restoring preview…"
+            editor?.undoManager?.removeAllActions(); expandToFile(); if let projectURL { rememberProject(projectURL) }; if files.isEmpty { refreshFiles() }; persistRecovery(); scheduleCompile()
         } catch { report(error.localizedDescription) }
     }
     @discardableResult func save(as: Bool = false) -> Bool {

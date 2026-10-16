@@ -13,7 +13,7 @@ struct WelcomeView: View {
                     Image(nsImage: icon).resizable().scaledToFit().frame(width: 132, height: 132)
                 }
                 Text("Typst Studio").font(.system(size: 42, weight: .bold)).padding(.top, 18)
-                Text("Version 0.1.2").font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
+                Text("Version 0.1.3").font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
                 Spacer().frame(height: 38)
                 VStack(spacing: 13) {
                     welcomeButton("Open Folder…", icon: "folder") { model.openPanel(folder: true) }

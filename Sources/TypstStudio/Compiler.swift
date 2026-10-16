@@ -1,6 +1,6 @@
 import Foundation
 import Darwin
-struct CompileResult { var pdf: Data?; var diagnostics: String; var elapsed: Double; var success: Bool }
+struct CompileResult { var pdf: Data?; var diagnostics: String; var elapsed: Double; var success: Bool; var fromCache = false }
 final class CompileCancellation: @unchecked Sendable {
     private let lock = NSLock()
     private var value = false

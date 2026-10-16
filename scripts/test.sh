@@ -18,3 +18,6 @@ if result.returncode:
     print(result.stderr[-2000:])
     raise SystemExit(result.returncode)
 PYTEST
+
+swiftc Sources/TypstStudio/Compiler.swift Sources/TypstStudio/WatchCompiler.swift Sources/TypstStudio/ProjectFiles.swift Sources/TypstStudio/StudioModel.swift Sources/TypstStudio/Preview.swift Sources/TypstStudio/SidebarTools.swift Tests/DocumentSwitch.swift -o .build/document-switch
+.build/document-switch

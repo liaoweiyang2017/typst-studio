@@ -39,7 +39,8 @@ final class WatchCompiler: @unchecked Sendable {
             if self.busy { self.pending = request; return }
             if let old = self.current, old.source == request.source, let result = self.lastResult {
                 self.current = request
-                request.completion(request.revision, result)
+                var cached = result; cached.fromCache = true
+                request.completion(request.revision, cached)
             } else { self.write(request) }
         }
     }
@@ -153,7 +154,8 @@ final class WatchCompiler: @unchecked Sendable {
             let deadline = Date().addingTimeInterval(0.3)
             while process.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
             if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-            process.waitUntilExit()
+            // Foundation waitUntilExit can wait on the launching run loop.
+            // Termination is already bounded above; never block UI shutdown here.
         }
         try? pipe?.fileHandleForReading.close()
         if let input { try? FileManager.default.removeItem(at: input) }

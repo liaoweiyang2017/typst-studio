@@ -17,3 +17,11 @@ The implementation remains SwiftUI/AppKit/PDFKit with no new runtime framework. 
 - https://github.com/xoengineering/FileTree was considered for navigation; adding another dependency would not fix the observed selection-notification loop, so the existing lightweight tree was retained with background directory reads.
 
 The original freeze was reproduced in the actual 0.1.1 app. `sample` captured repeated SourceEditor.updateNSView → NSTextView selection change → StudioModel.selectionChanged → SwiftUI graph transactions. A hosted-editor run-loop regression failed before the fix and passed after it; model-only compilation tests were insufficient to detect this defect.
+
+## 0.1.3 document-switch research
+
+- https://github.com/Myriad-Dreamin/tinymist/blob/main/CHANGELOG/CHANGELOG-2025.md describes avoiding VFS cache invalidation during document switching and managing dedicated compiler instances. This supports retaining per-document state rather than resetting the entire compiler on every selection.
+- https://github.com/pndv/typst-renderer describes per-editor preview selection and a pinned main-file option. Pinned-root editing is a different behavior from this task's per-file preview, so no main-file semantics were changed.
+- REA 6.5.0 `inspect-native-dispatch-metadata` initially rejected Edist's universal executable due to its 64 MiB analysis limit. Extracting its arm64 slice with `lipo` allowed static metadata inspection. Evidence ID: `ev_fe039b16ddee7e2faf4b411ef1833a411f2996f08428009f555902207613672c`; arm64 SHA-256: `0d792b6d55cdab33a720fb0fdc635541bc69a3fca7e74130fd8f0b4656cf2029`.
+- Observed metadata: `DocumentStore` contains `documents` and `activeDocument`; `ViewerCache` has `pdf`, `media`, `bib`; `OpenDocument` stores selection, `scrollOffset`, `textRevision`, `parkedLayout`, and `layoutParkStamp`. This is evidence of retained document/view state, not a proof of Edist's exact eviction policy or compiler algorithm.
+- Typst Studio independently implements a small three-entry LRU of decoded PDF + watch process. No Edist code or resources are used. Raw inspection artifacts and binary slices remain local under ignored analysis/tools directories.
