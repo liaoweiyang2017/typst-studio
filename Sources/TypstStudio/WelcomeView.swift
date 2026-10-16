@@ -14,21 +14,21 @@ struct WelcomeView: View {
                     Image(nsImage: icon).resizable().scaledToFit().frame(width: 132, height: 132)
                 }
                 Text("Typst Studio").font(.system(size: 42, weight: .bold)).padding(.top, 18)
-                Text("Version 0.1.5").font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
+                Text(model.tr("Version") + " " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.6")).font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
                 Spacer().frame(height: 38)
                 VStack(spacing: 13) {
-                    welcomeButton("Open Folder…", icon: "folder") { model.openPanel(folder: true) }
-                    welcomeButton("New Project from Template…", icon: "doc.badge.plus") { templates = true }
-                    welcomeButton("Open File…", icon: "doc.text") { model.openPanel() }
+                    welcomeButton(model.tr("Open Folder…"), icon: "folder") { model.openPanel(folder: true) }
+                    welcomeButton(model.tr("New Project from Template…"), icon: "doc.badge.plus") { templates = true }
+                    welcomeButton(model.tr("Open File…"), icon: "doc.text") { model.openPanel() }
                 }.frame(maxWidth: 410)
-                Text("Opening a file opens its folder as the project.").font(.system(size: 12)).foregroundStyle(.tertiary).padding(.top, 18)
-                if model.hasRecovery { Button("Restore Unsaved Draft") { model.restoreDraft() }.buttonStyle(.link).padding(.top, 12) }
+                Text(model.tr("Opening a file opens its folder as the project.")).font(.system(size: 12)).foregroundStyle(.tertiary).padding(.top, 18)
+                if model.hasRecovery { Button(model.tr("Restore Unsaved Draft")) { model.restoreDraft() }.buttonStyle(.link).padding(.top, 12) }
                 Spacer(minLength: 25)
             }.padding(.horizontal, 32).frame(maxWidth: .infinity)
             VStack(alignment: .leading, spacing: 20) {
-                Text("Recent Projects").font(.system(size: 21, weight: .bold)).padding(.top, 25)
+                Text(model.tr("Recent Projects")).font(.system(size: 21, weight: .bold)).padding(.top, 25)
                 if model.recentProjects.isEmpty {
-                    Spacer(); Text("No recent projects").font(.system(size: 17)).foregroundStyle(.tertiary).frame(maxWidth: .infinity); Spacer()
+                    Spacer(); Text(model.tr("No recent projects")).font(.system(size: 17)).foregroundStyle(.tertiary).frame(maxWidth: .infinity); Spacer()
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
@@ -55,9 +55,9 @@ struct WelcomeView: View {
         }.frame(minWidth: 900, minHeight: 610).background(Color(nsColor: .textBackgroundColor))
         .sheet(isPresented: $templates) {
             VStack(alignment: .leading, spacing: 18) {
-                HStack { Text("New Project from Template").font(.title2.bold()); Spacer(); Button("Cancel") { templates = false } }
+                HStack { Text(model.tr("New Project from Template")).font(.title2.bold()); Spacer(); Button(model.tr("Cancel")) { templates = false } }
                 ForEach(0..<3) { index in
-                    Button(["Blank document", "Article", "Mathematics notes"][index]) {
+                    Button(model.tr(["Blank document", "Article", "Mathematics notes"][index])) {
                         templates = false
                         model.createTemplate(index)
                     }.buttonStyle(.bordered).controlSize(.large)
@@ -66,7 +66,7 @@ struct WelcomeView: View {
         }
     }
     func welcomeButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { HStack(spacing: 18) { Image(systemName: icon).font(.system(size: 23)).foregroundStyle(.blue).frame(width: 28); Text(title).font(.system(size: 18)); Spacer() }.padding(.horizontal, 23).frame(height: 57).contentShape(Rectangle()) }.buttonStyle(WelcomeRowStyle(baseOpacity: 0.045, cornerRadius: 13))
+        Button(action: action) { HStack(spacing: 18) { Image(systemName: icon).font(.system(size: 23)).foregroundStyle(.blue).frame(width: 28); Text(model.tr(title)).font(.system(size: 18)); Spacer() }.padding(.horizontal, 23).frame(height: 57).contentShape(Rectangle()) }.buttonStyle(WelcomeRowStyle(baseOpacity: 0.045, cornerRadius: 13))
     }
 }
 

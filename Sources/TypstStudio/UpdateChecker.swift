@@ -62,7 +62,7 @@ enum UpdateError: LocalizedError {
     private var checkedOnLaunch = false
     private let session: URLSession
     private let feedURL: URL
-    init(currentVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.5", session: URLSession? = nil, feedURL: URL? = nil) {
+    init(currentVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.6", session: URLSession? = nil, feedURL: URL? = nil) {
         self.currentVersion = currentVersion; self.feedURL = feedURL ?? Self.feedURL
         if let session { self.session = session }
         else {
@@ -106,6 +106,16 @@ enum UpdateError: LocalizedError {
             status = "Could not check for updates. " + error.localizedDescription
             showResult = presentResult && manual
         }
+    }
+    func displayStatus(language: String) -> String {
+        guard StudioLanguage.resolved(language) == "zh-Hans" else { return status }
+        if isChecking { return "正在检查更新…" }
+        if let available {
+            return available.isCompatible ? "Typst Studio \(available.version) 已发布，当前版本为 \(currentVersion)。" : "版本 \(available.version) 需要 macOS \(available.minimumMacOS) 或更高版本。"
+        }
+        if status.hasPrefix("Could not check") { return "无法检查更新，请检查网络后重试。\n" + status }
+        if status.hasPrefix("You’re up to date") { return "已是最新版本（\(currentVersion)）。" }
+        return StudioLanguage.text(status, language: language)
     }
     func openDownload() {
         guard let available, available.isCompatible else { return }

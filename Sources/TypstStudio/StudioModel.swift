@@ -41,8 +41,10 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     @Published var revision = 0
     @Published var successfulRevision = -1
     @Published var status = "Preparing preview…"
-    @Published var fontSize = 14.0
-    @Published var theme = "System"
+    @Published var fontSize = 14.0 { didSet { UserDefaults.standard.set(fontSize, forKey: "fontSize") } }
+    @Published var theme = "System" { didSet { UserDefaults.standard.set(theme, forKey: "theme") } }
+    @Published var language = UserDefaults.standard.string(forKey: "language") ?? "System" { didSet { UserDefaults.standard.set(language, forKey: "language") } }
+    func tr(_ key: String) -> String { StudioLanguage.text(key, language: language) }
     @Published var pdfAppearance = UserDefaults.standard.string(forKey: "pdfAppearance") ?? "Automatic" {
         didSet { UserDefaults.standard.set(pdfAppearance, forKey: "pdfAppearance") }
     }
@@ -52,9 +54,9 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     @Published var darkPDFAppearance = UserDefaults.standard.string(forKey: "darkPDFAppearance") ?? "Night" {
         didSet { UserDefaults.standard.set(darkPDFAppearance, forKey: "darkPDFAppearance") }
     }
-    @Published var spellCheck = true
-    @Published var typingSound = false
-    @Published var followCursor = false
+    @Published var spellCheck = (UserDefaults.standard.object(forKey: "spellCheck") as? Bool) ?? true { didSet { UserDefaults.standard.set(spellCheck, forKey: "spellCheck") } }
+    @Published var typingSound = (UserDefaults.standard.object(forKey: "typingSound") as? Bool) ?? false { didSet { UserDefaults.standard.set(typingSound, forKey: "typingSound") } }
+    @Published var followCursor = (UserDefaults.standard.object(forKey: "followCursor") as? Bool) ?? false { didSet { UserDefaults.standard.set(followCursor, forKey: "followCursor") } }
     weak var editor: NSTextView?
     weak var preview: PDFView?
     private var debounce: DispatchWorkItem?

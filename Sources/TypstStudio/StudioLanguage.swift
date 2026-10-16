@@ -1,0 +1,91 @@
+import Foundation
+
+/// Stable English keys keep stored preferences independent of the display language.
+enum StudioLanguage {
+    static func resolved(_ selection: String, preferred: [String] = Locale.preferredLanguages) -> String {
+        if selection == "zh-Hans" || selection == "en" { return selection }
+        let first = preferred.first ?? "en"
+        return first.hasPrefix("zh-Hans") || first == "zh" || first.hasPrefix("zh-CN") || first.hasPrefix("zh-SG") ? "zh-Hans" : "en"
+    }
+    static func text(_ key: String, language: String) -> String {
+        guard resolved(language) == "zh-Hans" else { return key }
+        return simplifiedChinese[key] ?? key
+    }
+    static let simplifiedChinese: [String: String] = [
+        "Settings": "设置",
+        "General": "通用",
+        "Editor": "编辑器",
+        "PDF Preview": "PDF 预览",
+        "Software Update": "软件更新",
+        "Done": "完成",
+        "Language and appearance": "语言与外观",
+        "Language": "语言",
+        "Follow system": "跟随系统",
+        "Language changes apply immediately. System dialogs use the macOS language.": "语言更改立即生效。系统对话框使用 macOS 的语言。",
+        "Appearance": "应用外观",
+        "System": "跟随系统",
+        "Light": "浅色",
+        "Dark": "深色",
+        "Editing": "编辑",
+        "Editor font size": "编辑器字号",
+        "System spell checking": "系统拼写检查",
+        "Typing sound": "打字音效",
+        "Document font": "文档字体",
+        "Font family": "字体",
+        "Insert font setting": "插入字体设置",
+        "Inserts a Typst font setting into the current document.": "在当前文档中插入 Typst 字体设置。",
+        "Reading colors": "阅读配色",
+        "PDF appearance": "PDF 配色模式",
+        "Automatic · follow appearance": "自动 · 跟随应用外观",
+        "Original colors": "原始配色",
+        "Night": "夜间模式",
+        "Green reading mode": "绿色护眼模式",
+        "PDF in light appearance": "浅色外观下的 PDF",
+        "PDF in dark appearance": "深色外观下的 PDF",
+        "Preview colors only. Exported PDFs keep their original colors.": "仅改变预览配色，导出的 PDF 保留原始颜色。",
+        "Navigation": "导航",
+        "Preview follows cursor (text matching)": "预览跟随光标（文本匹配）",
+        "⌘-click a PDF text line to find its source. Matching is text based; formulas and repeated text may not map precisely.": "按住 ⌘ 点击 PDF 文本行可定位源码。此功能基于文本匹配，公式及重复文本可能无法精确定位。",
+        "Current version": "当前版本",
+        "Check for updates on startup": "启动时检查更新",
+        "Checking…": "正在检查…",
+        "Check for Updates…": "检查更新…",
+        "Download": "下载",
+        "Not checked yet.": "尚未检查更新。",
+        "Checking for updates…": "正在检查更新…",
+        "Welcome": "欢迎",
+        "New Document": "新建文档",
+        "Open…": "打开…",
+        "Open Project Folder…": "打开项目文件夹…",
+        "Save": "保存",
+        "Save As…": "另存为…",
+        "Export PDF…": "导出 PDF…",
+        "Settings…": "设置…",
+        "Typeset": "排版",
+        "Compile": "编译",
+        "Symbols": "符号",
+        "Pop Out Preview": "独立预览窗口",
+        "Follow Cursor (Text Match)": "跟随光标（文本匹配）",
+        "Find…": "查找…",
+        "Download Update": "下载更新",
+        "OK": "好",
+        "Open Folder…": "打开文件夹…",
+        "New Project from Template…": "从模板新建项目…",
+        "Open File…": "打开文件…",
+        "Opening a file opens its folder as the project.": "打开文件时，将其所在文件夹作为项目。",
+        "Restore Unsaved Draft": "恢复未保存的草稿",
+        "Recent Projects": "最近项目",
+        "No recent projects": "暂无最近项目",
+        "New Project from Template": "从模板新建项目",
+        "Cancel": "取消",
+        "Blank document": "空白文档",
+        "Article": "文章",
+        "Mathematics notes": "数学笔记",
+        "Toggle sidebar": "显示或隐藏侧栏",
+        "Toggle PDF preview": "显示或隐藏 PDF 预览",
+        "No problems.": "没有问题。",
+        "Search the project": "搜索项目",
+        "Search": "搜索",
+        "Version": "版本"
+    ]
+}

@@ -41,3 +41,11 @@ The original freeze was reproduced in the actual 0.1.1 app. `sample` captured re
 - https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows and https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax describe release publication triggers and contents permissions. The public distribution workflow is restricted to release/dispatch events and uses a pinned official checkout action; it has no access to private source or user credentials.
 - The app consumes the public latest-release update.json with an ephemeral URLSession, bounded timeout/manifest size, strict stable-version parsing, and fixed GitHub repository asset URLs. It never executes manifest content or silently installs a downloaded binary.
 - Welcome buttons use one shared SwiftUI ButtonStyle with full-label contentShape, onHover state and pressed feedback. No tracking areas or manual cursor push/pop are needed.
+
+## 0.1.6 — Settings and language
+
+- https://github.com/sindresorhus/Settings — native multi-pane settings reference. We use SwiftUI List + grouped Form directly, without a dependency.
+- https://github.com/Abedalkareem/LanguageManager-SwiftUI — runtime language selection reference. Our small English/Simplified Chinese catalog resolves a persisted language selection and keeps preference identifiers independent of translated labels.
+- https://developer.apple.com/documentation/swiftui/form — native grouped controls.
+
+App-owned settings, welcome and primary command labels switch immediately; OS dialogs and raw compiler diagnostics retain their own language. Localization does not reset the editor or PDF cache.

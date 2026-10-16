@@ -14,39 +14,39 @@ import PDFKit
             }
                 .onAppear { delegate.model = model; NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true); Task { await updates.checkAtLaunch() } }
                 .sheet(isPresented: $model.showSettings) { SettingsView(model: model).environmentObject(updates) }
-                .alert("Software Update", isPresented: $updates.showResult) {
-                    if updates.available?.isCompatible == true { Button("Download Update") { updates.openDownload() } }
-                    Button("OK", role: .cancel) {}
-                } message: { Text(updates.status) }
+                .alert(model.tr("Software Update"), isPresented: $updates.showResult) {
+                    if updates.available?.isCompatible == true { Button(model.tr("Download Update")) { updates.openDownload() } }
+                    Button(model.tr("OK"), role: .cancel) {}
+                } message: { Text(updates.displayStatus(language: model.language)) }
                 .preferredColorScheme(model.theme == "Dark" ? .dark : model.theme == "Light" ? .light : nil)
                 .background(WindowGuard(model: model))
                 .onOpenURL { if ProjectFiles.isDirectory($0) { model.openProject($0) } else { model.openFile($0) } }
         }.defaultSize(width: 1360, height: 900)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Welcome") { if model.confirmDiscard() { model.showWelcome = true } }
-                Button("New Document") { model.newDocument() }.keyboardShortcut("n")
-                Button("Open…") { model.openPanel() }.keyboardShortcut("o")
-                Button("Open Project Folder…") { model.openPanel(folder: true) }.keyboardShortcut("o", modifiers: [.command, .shift])
+                Button(model.tr("Welcome")) { if model.confirmDiscard() { model.showWelcome = true } }
+                Button(model.tr("New Document")) { model.newDocument() }.keyboardShortcut("n")
+                Button(model.tr("Open…")) { model.openPanel() }.keyboardShortcut("o")
+                Button(model.tr("Open Project Folder…")) { model.openPanel(folder: true) }.keyboardShortcut("o", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .saveItem) {
-                Button("Save") { model.save() }.keyboardShortcut("s")
-                Button("Save As…") { model.save(as: true) }.keyboardShortcut("s", modifiers: [.command, .shift])
+                Button(model.tr("Save")) { model.save() }.keyboardShortcut("s")
+                Button(model.tr("Save As…")) { model.save(as: true) }.keyboardShortcut("s", modifiers: [.command, .shift])
                 Divider()
-                Button("Export PDF…") { model.exportPDF() }.keyboardShortcut("e", modifiers: [.command, .shift])
+                Button(model.tr("Export PDF…")) { model.exportPDF() }.keyboardShortcut("e", modifiers: [.command, .shift])
             }
             CommandGroup(after: .appInfo) {
-                Button("Check for Updates…") { Task { await updates.check() } }.disabled(updates.isChecking)
+                Button(model.tr("Check for Updates…")) { Task { await updates.check() } }.disabled(updates.isChecking)
             }
-            CommandGroup(replacing: .appSettings) { Button("Settings…") { model.showSettings = true }.keyboardShortcut(",") }
-            CommandMenu("Typeset") {
-                Button("Compile") { model.compile() }.keyboardShortcut("b")
-                Button("Symbols") { model.showSymbols = true }.keyboardShortcut("m", modifiers: [.command, .shift])
-                Button("Pop Out Preview") { model.popOut() }
-                Toggle("Follow Cursor (Text Match)", isOn: $model.followCursor)
+            CommandGroup(replacing: .appSettings) { Button(model.tr("Settings…")) { model.showSettings = true }.keyboardShortcut(",") }
+            CommandMenu(model.tr("Typeset")) {
+                Button(model.tr("Compile")) { model.compile() }.keyboardShortcut("b")
+                Button(model.tr("Symbols")) { model.showSymbols = true }.keyboardShortcut("m", modifiers: [.command, .shift])
+                Button(model.tr("Pop Out Preview")) { model.popOut() }
+                Toggle(model.tr("Follow Cursor (Text Match)"), isOn: $model.followCursor)
             }
             CommandGroup(after: .textEditing) {
-                Button("Find…") {
+                Button(model.tr("Find…")) {
                     let item = NSMenuItem(); item.tag = NSTextFinder.Action.showFindInterface.rawValue
                     model.editor?.performFindPanelAction(item)
                 }.keyboardShortcut("f")
@@ -80,19 +80,19 @@ struct StudioView: View {
         .frame(minWidth: 980, minHeight: 620).tint(.blue)
         .preferredColorScheme(model.theme == "Dark" ? .dark : model.theme == "Light" ? .light : nil)
         .toolbar {
-            ToolbarItem(placement: .navigation) { Button { model.sidebar.toggle() } label: { Image(systemName: "sidebar.left") }.help("Toggle sidebar") }
+            ToolbarItem(placement: .navigation) { Button { model.sidebar.toggle() } label: { Image(systemName: "sidebar.left") }.help(model.tr("Toggle sidebar")) }
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 7) { Text(model.title).font(.system(size: 13, weight: .semibold)); if model.dirty { Circle().fill(.secondary).frame(width: 5, height: 5) } }
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { section = 4; model.sidebar = true; model.showDiagnostics.toggle() } label: { Image(systemName: model.diagnostics.isEmpty ? "exclamationmark.triangle.fill" : "exclamationmark.triangle.fill").foregroundStyle(model.diagnostics.isEmpty ? Color.secondary : .orange) }.help(model.status)
-                Button { previewVisible.toggle() } label: { Image(systemName: "rectangle.on.rectangle").foregroundStyle(previewVisible ? Color.blue : .secondary) }.help("Toggle PDF preview")
+                Button { previewVisible.toggle() } label: { Image(systemName: "rectangle.on.rectangle").foregroundStyle(previewVisible ? Color.blue : .secondary) }.help(model.tr("Toggle PDF preview"))
             }
         }
         .sheet(isPresented: $model.showSymbols) { SymbolsView(model: model) }
         .sheet(isPresented: Binding(get: { model.assetURL != nil }, set: { if !$0 { model.assetURL = nil } })) {
             VStack {
-                HStack { Text(model.assetURL?.lastPathComponent ?? "Preview").font(.headline); Spacer(); Button("Done") { model.assetURL = nil } }
+                HStack { Text(model.assetURL?.lastPathComponent ?? "Preview").font(.headline); Spacer(); Button(model.tr("Done")) { model.assetURL = nil } }
                 if let url = model.assetURL {
                     if let image = NSImage(contentsOf: url) { Image(nsImage: image).resizable().scaledToFit() }
                     else { ScrollView { Text((try? String(contentsOf: url, encoding: .utf8)) ?? "This file format cannot be previewed.").textSelection(.enabled) } }
@@ -121,7 +121,7 @@ struct StudioView: View {
                     Button { model.insert("#align(center)[text]") } label: { Image(systemName: "text.aligncenter") }.help("Center")
                     Button { model.insert("\n- ") } label: { Image(systemName: "list.bullet") }.help("Bullet list")
                     Button { model.insert("\n+ ") } label: { Image(systemName: "list.number") }.help("Numbered list")
-                    Button { model.showSymbols = true } label: { Image(systemName: "sum") }.help("Symbols")
+                    Button { model.showSymbols = true } label: { Image(systemName: "sum") }.help(model.tr("Symbols"))
                     Spacer()
                     if model.compiling { ProgressView().controlSize(.mini) }
                     Text("\(model.text.split { $0.isWhitespace || $0.isNewline }.count) words").foregroundStyle(.secondary)
@@ -143,7 +143,7 @@ struct StudioView: View {
                     Button { model.newDocument() } label: { Image(systemName: "doc.badge.plus") }.help("New document")
                     Spacer()
                     Button { model.refreshFiles() } label: { Image(systemName: "arrow.clockwise") }.help("Refresh files")
-                    Button { model.showSettings = true } label: { Image(systemName: "gearshape") }.help("Settings")
+                    Button { model.showSettings = true } label: { Image(systemName: "gearshape") }.help(model.tr("Settings"))
                 }.buttonStyle(.borderless).foregroundStyle(.secondary).padding(12)
             } else if section == 1 {
                 ProjectSearchPane(model: model)
@@ -157,7 +157,7 @@ struct StudioView: View {
             } else {
                 if model.diagnostics.isEmpty {
                     Spacer()
-                    VStack(spacing: 13) { Image(systemName: "checkmark.circle").font(.system(size: 32, weight: .ultraLight)).foregroundStyle(.tertiary); Text("No problems.").font(.system(size: 14)).foregroundStyle(.secondary) }
+                    VStack(spacing: 13) { Image(systemName: "checkmark.circle").font(.system(size: 32, weight: .ultraLight)).foregroundStyle(.tertiary); Text(model.tr("No problems.")).font(.system(size: 14)).foregroundStyle(.secondary) }
                     Spacer()
                 } else {
                     ScrollView { VStack(alignment: .leading, spacing: 12) {
@@ -271,59 +271,9 @@ struct PDFOutlineRow: View {
 struct SymbolsView: View {
     @ObservedObject var model: StudioModel
     var body: some View {
-        VStack { HStack { Text("Symbols").font(.title2.bold()); Spacer(); Button("Done") { model.showSymbols = false } }.padding(); SymbolPalette(model: model) }.frame(width: 440, height: 560)
+        VStack { HStack { Text(model.tr("Symbols")).font(.title2.bold()); Spacer(); Button(model.tr("Done")) { model.showSymbols = false } }.padding(); SymbolPalette(model: model) }.frame(width: 440, height: 560)
     }
 }
-struct SettingsView: View {
-    @ObservedObject var model: StudioModel
-    @EnvironmentObject private var updates: UpdateChecker
-    @State var font = "New Computer Modern"
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack { Text("Editor settings").font(.title2.bold()); Spacer(); Button("Done") { model.showSettings = false } }
-            Form {
-                Picker("Appearance", selection: $model.theme) { ForEach(["System", "Light", "Dark"], id: \.self) { Text($0) } }
-                Picker("PDF appearance", selection: $model.pdfAppearance) {
-                    Text("Automatic · follow appearance").tag("Automatic")
-                    Text("Original colors").tag("Original")
-                    Text("Night").tag("Night")
-                    Text("Green reading mode").tag("Green")
-                }
-                Picker("PDF in light appearance", selection: $model.lightPDFAppearance) {
-                    Text("Original colors").tag("Original")
-                    Text("Night").tag("Night")
-                    Text("Green reading mode").tag("Green")
-                }.disabled(model.pdfAppearance != "Automatic")
-                Picker("PDF in dark appearance", selection: $model.darkPDFAppearance) {
-                    Text("Original colors").tag("Original")
-                    Text("Night").tag("Night")
-                    Text("Green reading mode").tag("Green")
-                }.disabled(model.pdfAppearance != "Automatic")
-                Text("Preview colors only. Exported PDFs keep their original colors.").font(.caption).foregroundStyle(.secondary)
-                HStack { Text("Editor font size"); Slider(value: $model.fontSize, in: 11...24, step: 1); Text("\(Int(model.fontSize)) pt") }
-                Toggle("System spell checking", isOn: $model.spellCheck)
-                Toggle("Typing sound", isOn: $model.typingSound)
-                Toggle("Preview follows cursor (text matching)", isOn: $model.followCursor)
-                Toggle("Check for updates on startup", isOn: $updates.checkOnStartup)
-                HStack {
-                    Button(updates.isChecking ? "Checking…" : "Check for Updates…") { Task { await updates.check(presentResult: false) } }.disabled(updates.isChecking)
-                    Spacer()
-                    Text("Version " + updates.currentVersion).font(.caption).foregroundStyle(.secondary)
-                }
-                Text(updates.status).font(.caption).foregroundStyle(.secondary)
-                if let available = updates.available, available.isCompatible {
-                    Button("Download " + available.version) { updates.openDownload() }
-                }
-                Picker("Document font", selection: $font) { ForEach(NSFontManager.shared.availableFontFamilies.sorted(), id: \.self) { Text($0) } }
-                Button("Insert font setting") { model.showSettings = false; model.insert("#set text(font: \"\(font)\")\n") }
-            }.formStyle(.grouped)
-            Text("⌘-click a PDF text line to find its source. Matching is text based; formulas and repeated text may not map precisely.").font(.caption).foregroundStyle(.secondary)
-        }.padding(24).frame(width: 580, height: 650)
-        .onChange(of: model.fontSize) { _, value in UserDefaults.standard.set(value, forKey: "fontSize") }
-        .onChange(of: model.theme) { _, value in UserDefaults.standard.set(value, forKey: "theme") }
-    }
-}
-
 struct WindowGuard: NSViewRepresentable {
     let model: StudioModel
     func makeCoordinator() -> Guard { Guard(model) }
