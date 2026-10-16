@@ -36,14 +36,17 @@ public sealed partial class MainWindow : Window
     {
         App.Trace("Main XAML loading"); InitializeComponent(); App.Trace("Main XAML loaded");
         var dpi = Math.Max(1, GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0);
-        AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1200 * dpi), (int)(800 * dpi)));
-        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter) { presenter.PreferredMinimumWidth = (int)(1000 * dpi); presenter.PreferredMinimumHeight = (int)(600 * dpi); }
+        var work = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary).WorkArea;
+        var width = Math.Min((int)(1200 * dpi), work.Width - 48); var height = Math.Min((int)(800 * dpi), work.Height - 48);
+        AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(work.X + (work.Width - width) / 2, work.Y + (work.Height - height) / 2, width, height));
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter) { presenter.PreferredMinimumWidth = Math.Min((int)(880 * dpi), width); presenter.PreferredMinimumHeight = Math.Min((int)(500 * dpi), height); }
         App.Trace("Window resized"); AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Studio.ico"));
         App.Trace("Icon loaded"); SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
         if (_args.Contains("--smoke")) _settingsPath = Path.Combine(Path.GetTempPath(), "TypstStudio-Smoke-" + Environment.ProcessId, "settings.json");
-        App.Trace("Backdrop set"); LoadSettings(); RefreshRecent(); App.Trace("Settings loaded");
+        App.Trace("Backdrop set"); LoadSettings(); RefreshRecent(); Root.ActualThemeChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateCaption); App.Trace("Settings loaded");
         Preview.SourceRequested += async (page, x, y) => await InverseAsync(page, x, y);
         Preview.Error += message => SetStatus(message);
+        Preview.PageChanged += (page, count) => PageLabel.Text = $"{page} / {count}";
         AppWindow.Closing += async (_, e) =>
         {
             if (_closing) return;
@@ -53,17 +56,19 @@ public sealed partial class MainWindow : Window
         };
         Root.Loaded += async (_, _) =>
         {
+            ApplyLanguage(); UpdateCaption();
             var smoke = Array.IndexOf(_args, "--smoke");
             if (smoke >= 0 && smoke + 1 < _args.Length) await RunSmokeAsync(_args[smoke + 1]);
             else if (_args.Skip(1).FirstOrDefault(path => File.Exists(path) && Path.GetExtension(path).Equals(".typ", StringComparison.OrdinalIgnoreCase)) is { } file)
                 await SafeAsync(() => OpenProjectAsync(Path.GetDirectoryName(Path.GetFullPath(file))!, Path.GetFullPath(file)));
-            else SetStatus("选择文件夹或最近工程，开始编写。");
+            else SetStatus(UiText.T("选择文件夹或最近工程，开始编写。", "Choose a folder or recent project to begin."));
         };
+        Root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(CommentKeyDown), true);
         AddShortcut(VirtualKey.O, VirtualKeyModifiers.Control, async () => await PickFolderAsync());
         AddShortcut(VirtualKey.S, VirtualKeyModifiers.Control, async () => await SaveCurrentAsync());
         AddShortcut(VirtualKey.B, VirtualKeyModifiers.Control, async () => await CompileNowAsync());
         AddShortcut(VirtualKey.J, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, async () => await ForwardAsync());
-        AddShortcut(VirtualKey.J, VirtualKeyModifiers.Control | VirtualKeyModifiers.Menu, () => { if (!Preview.NavigateSelection()) SetStatus("请先在 PDF 中选择文字，或 Ctrl+单击公式。"); return Task.CompletedTask; });
+        AddShortcut(VirtualKey.J, VirtualKeyModifiers.Control | VirtualKeyModifiers.Menu, () => { if (!Preview.NavigateSelection()) SetStatus(UiText.T("请先在 PDF 中选择文字，或 Ctrl+单击公式。", "Select PDF text or Ctrl+click a formula first.")); return Task.CompletedTask; });
     }
     private void AddShortcut(VirtualKey key, VirtualKeyModifiers modifiers, Func<Task> action)
     { var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers }; accelerator.Invoked += async (_, e) => { e.Handled = true; try { await action(); } catch (Exception error) { SetStatus(error.Message); } }; Root.KeyboardAccelerators.Add(accelerator); }
@@ -77,9 +82,9 @@ public sealed partial class MainWindow : Window
     private async void New_Click(object sender, RoutedEventArgs e) => await SafeAsync(async () =>
     {
         if (!await ConfirmUnsavedAsync()) return;
-        var templates = new ComboBox { ItemsSource = new[] { "文章", "空白文档", "数学笔记" }, SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var templates = new ComboBox { ItemsSource = new[] { UiText.T("文章", "Article"), UiText.T("空白文档", "Blank"), UiText.T("数学笔记", "Math notes") }, SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
         if (await ShowDialogAsync(new ContentDialog { XamlRoot = Root.XamlRoot, Title = "从模板新建", Content = templates, PrimaryButtonText = "选择保存位置", CloseButtonText = "取消" }) != ContentDialogResult.Primary) return;
-        var picker = new FileSavePicker { SuggestedFileName = "main.typ" }; InitializePicker(picker); picker.FileTypeChoices.Add("Typst 文档", new List<string> { ".typ" });
+        var picker = new FileSavePicker { SuggestedFileName = "main.typ" }; InitializePicker(picker); picker.FileTypeChoices.Add(UiText.T("Typst 文档", "Typst document"), new List<string> { ".typ" });
         var file = await picker.PickSaveFileAsync(); if (file == null) return;
         await File.WriteAllTextAsync(file.Path, templates.SelectedIndex == 1 ? "" : "= 新文档\n\n开始编写内容。\n\n$ integral_0^1 x^2 dif x = 1/3 $\n");
         await OpenProjectAsync(Path.GetDirectoryName(file.Path)!, file.Path, confirmed: true);
@@ -91,15 +96,15 @@ public sealed partial class MainWindow : Window
         ShowPage(Workspace); _opening = true; Editor.IsEnabled = false; Files.IsEnabled = false;
         try {
         await DisposeProjectAsync(); _disposed = false; _buffers.Clear(); _current = null; Editor.IsReadOnly = true; SetEditorText(""); UpdateTitle(); _pdf = null; _pdfRevision = -1;
-        _root = Path.GetFullPath(root); _revision++; Busy.IsActive = true; SetStatus("正在读取工程…");
+        _root = Path.GetFullPath(root); _revision++; Busy.IsActive = true; SetStatus(UiText.T("正在读取工程…", "Reading project\u2026"));
         _sources = await Task.Run(() => ProjectFiles.Sources(_root));
         if (_disposed) return;
         _entry = ProjectFiles.MainFile(_sources) ?? selected;
         BuildTree();
-        if (_entry == null) { Busy.IsActive = false; SetStatus("文件夹中没有 .typ 文件，请新建文档。"); return; }
+        if (_entry == null) { Busy.IsActive = false; SetStatus(UiText.T("文件夹中没有 .typ 文件，请新建文档。", "No .typ files in this folder. Create a document to begin.")); return; }
         _session = new(Path.Combine(AppContext.BaseDirectory, "tinymist.exe"), _root, _entry);
-        _session.DiagnosticChanged += message => DispatcherQueue.TryEnqueue(() => { _diagnostics = message; ProblemsButton.Content = string.IsNullOrWhiteSpace(message) ? "无问题" : "查看问题"; });
-        _session.Failed += message => DispatcherQueue.TryEnqueue(() => SetStatus("编译服务已退出。请重新打开工程。 " + message));
+        _session.DiagnosticChanged += message => DispatcherQueue.TryEnqueue(() => { _diagnostics = message; ProblemsButton.Content = UiText.Translate(string.IsNullOrWhiteSpace(message) ? "无问题" : "查看问题"); });
+        _session.Failed += message => DispatcherQueue.TryEnqueue(() => SetStatus(UiText.T("编译服务已退出。请重新打开工程。 ", "The compiler stopped. Reopen the project. ") + message));
         await _session.InitializeAsync();
         await OpenBufferAsync(selected ?? _entry);
         _recent.RemoveAll(p => p.Equals(_root, StringComparison.OrdinalIgnoreCase)); _recent.Insert(0, _root); if (_recent.Count > 10) _recent.RemoveAt(10); SaveSettings();
@@ -122,7 +127,7 @@ public sealed partial class MainWindow : Window
                     var text = await File.ReadAllTextAsync(e.FullPath);
                     if (SourceBuffer.Normalize(text) != buffer.SavedText)
                     {
-                        if (buffer.Dirty) { SetStatus("磁盘文件已改变；保留当前未保存内容，保存前请检查外部修改。"); return; }
+                        if (buffer.Dirty) { SetStatus(UiText.T("磁盘文件已改变；保留当前未保存内容，保存前请检查外部修改。", "The file changed on disk. Your unsaved edits are retained; review external changes before saving.")); return; }
                         var replacement = new SourceBuffer(e.FullPath, text); _buffers[e.FullPath] = replacement;
                         if (_current == buffer) { _current = replacement; SetEditorText(replacement.Text); }
                     }
@@ -134,10 +139,10 @@ public sealed partial class MainWindow : Window
     }
     private async Task OpenBufferAsync(string path)
     {
-        if (!ProjectFiles.Inside(_root!, path)) throw new IOException("只打开当前工程内的源文件。");
+        if (!ProjectFiles.Inside(_root!, path)) throw new IOException(UiText.T("只打开当前工程内的源文件。", "Only source files within the current project can be opened."));
         var epoch = ++_fileEpoch;
         if (!_buffers.TryGetValue(path, out var buffer)) { buffer = new(path, await File.ReadAllTextAsync(path)); if (epoch != _fileEpoch || _disposed) return; _buffers[path] = buffer; }
-        _current = buffer; SetEditorText(buffer.Text); Editor.IsReadOnly = false; UpdateTitle(); Editor.Focus(FocusState.Programmatic);
+        Editor.ActivateEditor(); _current = buffer; SetEditorText(buffer.Text); Editor.IsReadOnly = false; UpdateTitle(); Editor.Focus(FocusState.Programmatic);
     }
     private void SetEditorText(string text)
     {
@@ -165,19 +170,6 @@ public sealed partial class MainWindow : Window
     {
         var a = RawOffset(start); var b = RawOffset(start + length); Editor.Select(a, b - a);
         Editor.Focus(FocusState.Programmatic); Editor.UpdateLayout();
-        if (Editor.Text.Length == 0) return;
-        var rectangle = Editor.GetRectFromCharacterIndex(Math.Min(a, Editor.Text.Length - 1), a == Editor.Text.Length);
-        static ScrollViewer? FindScroll(DependencyObject parent)
-        {
-            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is ScrollViewer scroll) return scroll;
-                if (FindScroll(child) is { } nested) return nested;
-            }
-            return null;
-        }
-        if (FindScroll(Editor) is { } viewer) viewer.ChangeView(null, Math.Max(0, viewer.VerticalOffset + rectangle.Y - viewer.ViewportHeight / 3), null, true);
     }
     private void Editor_TextChanged(object sender, RoutedEventArgs e)
     {
@@ -188,27 +180,23 @@ public sealed partial class MainWindow : Window
     private void Editor_SelectionChanged(object sender, RoutedEventArgs e)
     {
         if (_current == null) return; var position = EditorPosition();
-        PositionText.Text = $"行 {position.Line + 1}，列 {position.Column + 1}";
+        PositionText.Text = UiText.English ? $"Ln {position.Line + 1}, Col {position.Column + 1}" : $"行 {position.Line + 1}，列 {position.Column + 1}";
     }
     private async void Editor_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (_current == null || Editor.IsReadOnly) return;
         var control = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         if (control && e.Key is VirtualKey.B or VirtualKey.I or VirtualKey.U) { e.Handled = true; if (e.Key == VirtualKey.B) await CompileNowAsync(); return; }
-        if (e.Key == VirtualKey.Tab) { Editor.SelectedText = "  "; e.Handled = true; }
+
     }
-    private async void Editor_Paste(object sender, TextControlPasteEventArgs e)
-    {
-        e.Handled = true; if (Editor.IsReadOnly) return;
-        try { var content = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent(); if (content.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text)) Editor.SelectedText = SourceBuffer.Normalize(await content.GetTextAsync()); }
-        catch (Exception error) { SetStatus(error.Message); }
-    }
-    private void UpdateTitle() { EditorTitle.Text = _current == null ? "尚未打开文档" : Path.GetFileName(_current.Path) + (_current.Dirty ? " ●" : ""); Title = EditorTitle.Text + " — Typst Studio"; }
-    private async void ScheduleCompile(int delay = 160)
+
+    private void UpdateTitle() { EditorTitle.Text = _current == null ? UiText.Translate("尚未打开文档") : Path.GetFileName(_current.Path) + (_current.Dirty ? " ●" : ""); Title = EditorTitle.Text + " — Typst Studio"; }
+    private async void ScheduleCompile(int delay = -1)
     {
         _revision++; _pdfRevision = -1; _navigation.Cancel();
         _compile.Cancel(); _compile.Dispose(); _compile = new(); var token = _compile.Token;
-        try { await Task.Delay(delay, token); await CompileNowAsync(token); }
+        if (!_autoCompile) return;
+        try { await Task.Delay(delay < 0 ? _compileDelay : delay, token); await CompileNowAsync(token); }
         catch (OperationCanceledException) { }
     }
     private async Task CompileNowAsync(CancellationToken token = default)
@@ -216,7 +204,7 @@ public sealed partial class MainWindow : Window
         if (_session == null || _disposed) return;
         var revision = _revision; var session = _session;
         var documents = _buffers.ToDictionary(p => p.Key, p => p.Value.Text, StringComparer.OrdinalIgnoreCase);
-        Busy.IsActive = true; SetStatus("正在编译…"); var watch = Stopwatch.StartNew();
+        Busy.IsActive = true; SetStatus(UiText.T("正在编译…", "Compiling\u2026")); var watch = Stopwatch.StartNew();
         try
         {
             var pdf = await session.CompileAsync(documents, token);
@@ -224,44 +212,44 @@ public sealed partial class MainWindow : Window
             if (_pdf == null || !pdf.AsSpan().SequenceEqual(_pdf)) await Preview.SetDocumentAsync(pdf);
             if (revision != _revision || session != _session) return;
             _pdf = pdf; _pdfRevision = revision; PdfTitle.Text = "主文档 · " + Path.GetFileName(_entry);
-            SetStatus($"编译完成 · {watch.Elapsed.TotalMilliseconds:F0} ms · Ctrl+单击 PDF 可跳转源码");
+            SetStatus(UiText.English ? $"Compiled · {watch.Elapsed.TotalMilliseconds:F0} ms · Ctrl+click PDF to locate source" : $"编译完成 · {watch.Elapsed.TotalMilliseconds:F0} ms · Ctrl+单击 PDF 可跳转源码");
         }
         catch (OperationCanceledException) { }
-        catch (Exception error) { if (revision == _revision) { _pdfRevision = -1; SetStatus("编译失败，保留上次预览。 " + error.Message); } }
+        catch (Exception error) { if (revision == _revision) { _pdfRevision = -1; SetStatus(UiText.T("编译失败，保留上次预览。 ", "Compilation failed; previous preview retained. ") + error.Message); } }
         finally { if (revision == _revision) Busy.IsActive = false; }
     }
     private async Task ForwardAsync()
     {
-        if (_current == null || _session == null || _pdfRevision != _revision) { SetStatus("请等待编译成功后再定位。"); return; }
+        if (_current == null || _session == null || _pdfRevision != _revision) { SetStatus(UiText.T("请等待编译成功后再定位。", "Wait for a successful compile before navigating.")); return; }
         var version = _revision; var session = _session; var source = _current;
         _navigation.Cancel(); _navigation.Dispose(); _navigation = new(); var token = _navigation.Token;
         try
         {
-            SetStatus("正在定位 PDF…"); var position = EditorPosition();
+            SetStatus(UiText.T("正在定位 PDF…", "Locating in PDF\u2026")); var position = EditorPosition();
             var result = await session.ForwardAsync(source.Path, position.Line, position.Column, token);
             if (version != _revision || session != _session || source != _current) return;
-            if (result.Points.Length == 0) { SetStatus("这段源码没有对应的渲染位置。"); return; }
+            if (result.Points.Length == 0) { SetStatus(UiText.T("这段源码没有对应的渲染位置。", "This source has no rendered position.")); return; }
             if (_pdf == null || !result.Pdf.AsSpan().SequenceEqual(_pdf)) await Preview.SetDocumentAsync(result.Pdf);
             if (version != _revision || session != _session || source != _current) return;
             _pdf = result.Pdf;
-            Preview.GoTo(result.Points[0]); SetStatus("已定位到 PDF。");
+            Preview.GoTo(result.Points[0]); SetStatus(UiText.T("已定位到 PDF。", "Located in PDF."));
         }
         catch (OperationCanceledException) { } catch (Exception error) { SetStatus(error.Message); }
     }
     private async Task InverseAsync(int page, double x, double y)
     {
-        if (_session == null || _pdfRevision != _revision) { SetStatus("请等待编译成功后再定位。"); return; }
+        if (_session == null || _pdfRevision != _revision) { SetStatus(UiText.T("请等待编译成功后再定位。", "Wait for a successful compile before navigating.")); return; }
         var version = _revision; var session = _session;
         _navigation.Cancel(); _navigation.Dispose(); _navigation = new(); var token = _navigation.Token;
         try
         {
-            SetStatus("正在定位源码…"); var point = await session.InverseAsync(page + 1, x, y, token);
+            SetStatus(UiText.T("正在定位源码…", "Locating source\u2026")); var point = await session.InverseAsync(page + 1, x, y, token);
             if (version != _revision || session != _session) return;
             await OpenBufferAsync(point.Path);
             if (version != _revision || !StringComparer.OrdinalIgnoreCase.Equals(_current?.Path, point.Path)) return;
             var offset = SourceCoordinates.Offset(_current!.Text, point.Line, point.Column);
             SelectSource(offset, 0);
-            SetStatus("已定位到 " + Path.GetFileName(point.Path) + $"，行 {point.Line + 1}。主 PDF 保持不变。");
+            SetStatus(UiText.English ? $"Located in {Path.GetFileName(point.Path)}, line {point.Line + 1}. Main PDF retained." : "已定位到 " + Path.GetFileName(point.Path) + $"，行 {point.Line + 1}。主 PDF 保持不变。");
         }
         catch (OperationCanceledException) { } catch (Exception error) { SetStatus(error.Message); }
     }
@@ -272,17 +260,17 @@ public sealed partial class MainWindow : Window
     {
         if (_current == null) return;
         var text = _current.Text;
-        var picker = new FileSavePicker { SuggestedFileName = Path.GetFileNameWithoutExtension(_current.Path) + "-copy.typ" }; InitializePicker(picker); picker.FileTypeChoices.Add("Typst 文档", new List<string> { ".typ" });
+        var picker = new FileSavePicker { SuggestedFileName = Path.GetFileNameWithoutExtension(_current.Path) + "-copy.typ" }; InitializePicker(picker); picker.FileTypeChoices.Add(UiText.T("Typst 文档", "Typst document"), new List<string> { ".typ" });
         var file = await picker.PickSaveFileAsync(); if (file == null) return;
         var copy = new SourceBuffer(file.Path, await File.ReadAllTextAsync(file.Path)) { Text = text };
-        await copy.SaveAsync(); SetStatus("副本已保存。当前文档的编辑状态保持不变。");
+        await copy.SaveAsync(); SetStatus(UiText.T("副本已保存。当前文档的编辑状态保持不变。", "Copy saved. Current document edits are retained."));
     });
-    private async Task SaveCurrentAsync() { if (_current == null) return; await _current.SaveAsync(); UpdateTitle(); SetStatus("已保存 " + Path.GetFileName(_current.Path)); }
+    private async Task SaveCurrentAsync() { if (_current == null) return; await _current.SaveAsync(); UpdateTitle(); SetStatus(UiText.T("已保存 ", "Saved ") + Path.GetFileName(_current.Path)); }
     private async void Export_Click(object sender, RoutedEventArgs e) => await SafeAsync(async () =>
     {
-        if (_pdf == null || _pdfRevision != _revision) { SetStatus("请先成功编译当前内容，再导出 PDF。"); return; }
-        var data = _pdf; var picker = new FileSavePicker { SuggestedFileName = Path.GetFileNameWithoutExtension(_entry) }; InitializePicker(picker); picker.FileTypeChoices.Add("PDF 文档", new List<string> { ".pdf" });
-        var file = await picker.PickSaveFileAsync(); if (file != null) { await File.WriteAllBytesAsync(file.Path, data); SetStatus("PDF 已导出。"); }
+        if (_pdf == null || _pdfRevision != _revision) { SetStatus(UiText.T("请先成功编译当前内容，再导出 PDF。", "Compile the current content successfully before exporting.")); return; }
+        var data = _pdf; var picker = new FileSavePicker { SuggestedFileName = Path.GetFileNameWithoutExtension(_entry) }; InitializePicker(picker); picker.FileTypeChoices.Add(UiText.T("PDF 文档", "PDF document"), new List<string> { ".pdf" });
+        var file = await picker.PickSaveFileAsync(); if (file != null) { await File.WriteAllBytesAsync(file.Path, data); SetStatus(UiText.T("PDF 已导出。", "PDF exported.")); }
     });
     private void BuildTree()
     {
@@ -300,7 +288,8 @@ public sealed partial class MainWindow : Window
             var leaf = new TreeViewNode { Content = new FileItem(parts[^1], file) }; if (parent == null) Files.RootNodes.Add(leaf); else parent.Children.Add(leaf);
         }
     }
-    private sealed record FileItem(string Name, string? Path) { public override string ToString() => Name; }
+    [Microsoft.UI.Xaml.Data.Bindable]
+    public sealed record FileItem(string Name, string? Path) { public string Glyph => Path == null ? "\uE8B7" : "\uE8A5"; public override string ToString() => Name; }
     private async void Files_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
     { var item = args.InvokedItem is TreeViewNode node ? node.Content as FileItem : args.InvokedItem as FileItem; if (item?.Path != null) await SafeAsync(() => OpenBufferAsync(item.Path)); }
     private void FileFilter_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) { if (_sources != null) BuildTree(); }
@@ -310,12 +299,12 @@ public sealed partial class MainWindow : Window
     private async void Problems_Click(object sender, RoutedEventArgs e) => await ShowMessageAsync("编译问题", string.IsNullOrWhiteSpace(_diagnostics) ? "没有编译问题。" : _diagnostics);
     private async void Find_Click(object sender, RoutedEventArgs e)
     {
-        var query = new TextBox { PlaceholderText = "查找当前源码" };
+        var query = new TextBox { PlaceholderText = UiText.Translate("查找当前源码") };
         var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, Title = "查找", Content = query, PrimaryButtonText = "查找", CloseButtonText = "取消" };
         if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary || _current == null || query.Text.Length == 0) return;
         var start = Math.Min(SourceBuffer.Normalize(Editor.Text[..Math.Min(Editor.SelectionStart + Editor.SelectionLength, Editor.Text.Length)]).Length, _current.Text.Length); var index = _current.Text.IndexOf(query.Text, start, StringComparison.OrdinalIgnoreCase);
         if (index < 0) index = _current.Text.IndexOf(query.Text, StringComparison.OrdinalIgnoreCase);
-        if (index >= 0) { SelectSource(index, query.Text.Length); } else SetStatus("没有找到匹配内容。");
+        if (index >= 0) { SelectSource(index, query.Text.Length); } else SetStatus(UiText.T("没有找到匹配内容。", "No matching text found."));
     }
     private void ShowPage(FrameworkElement page)
     { Welcome.Visibility = page == Welcome ? Visibility.Visible : Visibility.Collapsed; Workspace.Visibility = page == Workspace ? Visibility.Visible : Visibility.Collapsed; SettingsPage.Visibility = page == SettingsPage ? Visibility.Visible : Visibility.Collapsed; }
@@ -324,41 +313,14 @@ public sealed partial class MainWindow : Window
     private void RefreshRecent()
     {
         RecentProjects.Children.Clear();
-        if (_recent.Count == 0) RecentProjects.Children.Add(new TextBlock { Text = "暂无最近工程", Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], Margin = new Thickness(0, 24, 0, 0) });
+        if (_recent.Count == 0) RecentProjects.Children.Add(new TextBlock { Text = UiText.T("暂无最近工程", "No recent projects"), Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], Margin = new Thickness(0, 24, 0, 0) });
         foreach (var path in _recent)
         {
             var text = new StackPanel { Spacing = 4 }; text.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontSize = 18, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }); text.Children.Add(new TextBlock { Text = path, FontSize = 12, TextWrapping = TextWrapping.Wrap, Opacity = 0.65 });
             var row = new Grid { ColumnSpacing = 16 }; row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); row.Children.Add(new SymbolIcon(Symbol.Folder)); Grid.SetColumn(text, 1); row.Children.Add(text);
             var button = new Button { Content = row, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(16) };
-            button.Click += async (_, _) => { button.IsEnabled = false; SetStatus("正在打开 " + Path.GetFileName(path) + "…"); try { await SafeAsync(() => OpenProjectAsync(path)); } finally { button.IsEnabled = true; } }; RecentProjects.Children.Add(button);
+            button.Click += async (_, _) => { button.IsEnabled = false; SetStatus(UiText.T("正在打开 ", "Opening ") + Path.GetFileName(path) + "…"); try { await SafeAsync(() => OpenProjectAsync(path)); } finally { button.IsEnabled = true; } }; RecentProjects.Children.Add(button);
         }
-    }
-    private void Settings_Click(object sender, RoutedEventArgs e)
-    {
-        SettingsContent.Children.Clear();
-        var back = new Button { Content = "← 返回" }; back.Click += Back_Click; SettingsContent.Children.Add(back);
-        SettingsContent.Children.Add(new TextBlock { Text = "设置", FontSize = 32, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 16) });
-        void Heading(string title) => SettingsContent.Children.Add(new TextBlock { Text = title, FontSize = 20, Margin = new Thickness(0, 20, 0, 8) });
-        void Row(Symbol icon, string title, string description, FrameworkElement? control = null)
-        {
-            var grid = new Grid { Padding = new Thickness(20), ColumnSpacing = 20, MinHeight = 84 };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.Children.Add(new SymbolIcon(icon)); var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center }; text.Children.Add(new TextBlock { Text = title, FontSize = 16 }); text.Children.Add(new TextBlock { Text = description, Opacity = 0.65, TextWrapping = TextWrapping.Wrap }); Grid.SetColumn(text, 1); grid.Children.Add(text);
-            if (control != null) { Grid.SetColumn(control, 2); control.VerticalAlignment = VerticalAlignment.Center; grid.Children.Add(control); }
-            SettingsContent.Children.Add(new Border { Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"], CornerRadius = new CornerRadius(6), Child = grid });
-        }
-        Heading("个性化");
-        var theme = new ComboBox { Width = 180, ItemsSource = new[] { "跟随系统", "浅色", "深色" }, SelectedIndex = _theme == "Light" ? 1 : _theme == "Dark" ? 2 : 0 };
-        theme.SelectionChanged += (_, _) => { _theme = theme.SelectedIndex == 1 ? "Light" : theme.SelectedIndex == 2 ? "Dark" : "Default"; Root.RequestedTheme = Enum.Parse<ElementTheme>(_theme); SaveSettings(); };
-        Row(Symbol.Setting, "应用主题", "选择应用的浅色或深色外观，立即生效。", theme);
-        Heading("编辑器");
-        var font = new Slider { Width = 180, Minimum = 11, Maximum = 24, StepFrequency = 1, Value = Editor.FontSize }; font.ValueChanged += (_, _) => { Editor.FontSize = font.Value; SaveSettings(); };
-        Row(Symbol.Font, "编辑字号", "调整源码文字大小。", font);
-        Row(Symbol.Document, "自动编译", "编辑后自动编译；切换源文件时保持工程主文档与 PDF。");
-        Heading("PDF 与定位"); Row(Symbol.Find, "双向定位", "源码：Ctrl+Shift+J。PDF：Ctrl+单击公式，或选中文字后按 Ctrl+Alt+J。");
-        var fit = new Button { Content = "适合宽度" }; fit.Click += Fit_Click; Row(Symbol.Zoom, "页面缩放", "预览默认铺满可用宽度。", fit);
-        Heading("系统与关于"); Row(Symbol.Setting, "操作系统", System.Runtime.InteropServices.RuntimeInformation.OSDescription); Row(Symbol.Library, "架构", System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString()); Row(Symbol.Help, "Typst Studio", "Windows 0.1.0 · WinUI 3 · Tinymist / Typst · PDFium");
-        ShowPage(SettingsPage);
     }
     private async Task<bool> ConfirmUnsavedAsync()
     {
@@ -368,21 +330,17 @@ public sealed partial class MainWindow : Window
         if (result == ContentDialogResult.Primary) { try { foreach (var buffer in dirty) await buffer.SaveAsync(); } catch (Exception error) { SetStatus(error.Message); return false; } }
         return true;
     }
-    private Task ShowMessageAsync(string title, string content) => ShowDialogAsync(new ContentDialog { XamlRoot = Root.XamlRoot, Title = title, Content = new TextBox { Text = content, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, MaxHeight = 420 }, CloseButtonText = "关闭" });
+    private Task ShowMessageAsync(string title, string content) => ShowDialogAsync(new ContentDialog { XamlRoot = Root.XamlRoot, Title = title, Content = new TextBox { Text = UiText.Translate(content), IsReadOnly = true, TextWrapping = TextWrapping.Wrap, MaxHeight = 420 }, CloseButtonText = "关闭" });
     private async Task<ContentDialogResult> ShowDialogAsync(ContentDialog dialog)
     {
         if (_activeDialog != null) return ContentDialogResult.None;
+        dialog.RequestedTheme = Root.ActualTheme;
+        dialog.Title = UiText.Translate(dialog.Title?.ToString() ?? ""); dialog.PrimaryButtonText = UiText.Translate(dialog.PrimaryButtonText); dialog.SecondaryButtonText = UiText.Translate(dialog.SecondaryButtonText); dialog.CloseButtonText = UiText.Translate(dialog.CloseButtonText);
         _activeDialog = dialog;
         try { return await dialog.ShowAsync(); }
         finally { if (_activeDialog == dialog) _activeDialog = null; }
     }
     private async Task SafeAsync(Func<Task> action) { try { await action(); } catch (Exception error) { Busy.IsActive = false; SetStatus(error.Message); } }
-    private void LoadSettings()
-    {
-        try { using var settings = JsonDocument.Parse(File.ReadAllText(_settingsPath)); _theme = settings.RootElement.GetProperty("theme").GetString()!; Root.RequestedTheme = Enum.Parse<ElementTheme>(_theme); Editor.FontSize = Math.Clamp(settings.RootElement.GetProperty("fontSize").GetDouble(), 11, 24); _recent.AddRange(settings.RootElement.GetProperty("recent").EnumerateArray().Select(p => p.GetString()!).Where(Directory.Exists)); } catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or ArgumentException or KeyNotFoundException or InvalidOperationException or FormatException) { }
-    }
-    private void SaveSettings()
-    { try { Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!); File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new { theme = _theme, fontSize = Editor.FontSize, recent = _recent })); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { SetStatus(error.Message); } }
     private async Task DisposeProjectAsync()
     { _disposed = true; _revision++; _fileEpoch++; _compile.Cancel(); _navigation.Cancel(); _watcher?.Dispose(); _watcher = null; if (_session != null) await _session.DisposeAsync(); _session = null; Preview.Close(); }
     private async Task WaitForCompileAsync(string? expectedText = null)
@@ -408,7 +366,7 @@ public sealed partial class MainWindow : Window
             await OpenProjectAsync(root, confirmed: true);
             if (_pdf == null || _current == null) throw new InvalidOperationException("Initial compile failed: " + Status.Text);
             var offset = _current.Text.IndexOf("alpha", StringComparison.Ordinal); SelectSource(offset, 5);
-            await ForwardAsync(); if (!Status.Text.Contains("已定位")) throw new InvalidOperationException(Status.Text);
+            await ForwardAsync(); if (!Status.Text.Contains("已定位") && !Status.Text.Contains("Located")) throw new InvalidOperationException(Status.Text);
             var source = Path.Combine(root, "chapter.typ"); var child = await File.ReadAllTextAsync(source); var pos = SourceCoordinates.Position(SourceBuffer.Normalize(child), SourceBuffer.Normalize(child).IndexOf("alpha", StringComparison.Ordinal));
             var target = await _session!.ForwardAsync(source, pos.Line, pos.Column, CancellationToken.None);
             var point = target.Points.First(); Preview.GoTo(point); await InverseAsync(point.Page - 1, point.X + 0.5, point.Y - 1);
@@ -417,12 +375,32 @@ public sealed partial class MainWindow : Window
             await WaitForCompileAsync(previous + "\nNative editing smoke test.\n"); if (_pdfRevision != _revision || !_current.Dirty) throw new InvalidOperationException("Live editing compile failed");
             Editor.Undo(); await WaitForCompileAsync(previous);
             if (_current.Text != previous) throw new InvalidOperationException("Native undo did not restore the original source");
-            await Preview.WaitForRenderAsync();
+            Editor.ApplyStyle();
+            if (!Editor.HasHighlight) throw new InvalidOperationException("Typst native highlighting is missing");
+            SelectSource(0, previous.Length); Editor.ToggleComment(); await WaitForCompileAsync();
+            if (!Editor.Text.StartsWith("//")) throw new InvalidOperationException("Line comment was not inserted");
+            Editor.Undo(); await WaitForCompileAsync(previous);
+            if (Editor.Text != previous) throw new InvalidOperationException("Comment must undo in one action");
+            Editor.ShowLineNumbers = false; Editor.ShowLineNumbers = true;
+            _editorRatio = 0.6; ApplySplit(); Root.UpdateLayout();
+            if (EditorColumn.ActualWidth <= PreviewColumn.ActualWidth) throw new InvalidOperationException("Split ratio did not resize panes");
+            ResetSplit_Click(this, new RoutedEventArgs());
+            Preview.GoTo(point); await Preview.WaitForRenderAsync();
             await CaptureAsync(Path.Combine(root, "native-smoke.png"));
-            Settings_Click(this, new RoutedEventArgs()); await Task.Delay(150); await CaptureAsync(Path.Combine(root, "settings.png"));
+            Settings_Click(this, new RoutedEventArgs()); await Task.Delay(150);
+            var settingsBounds = SettingsContent.TransformToVisual(Root).TransformBounds(new Windows.Foundation.Rect(0, 0, SettingsContent.ActualWidth, SettingsContent.ActualHeight));
+            if (settingsBounds.Right > Root.ActualWidth + 1 || settingsBounds.Left < 0) throw new InvalidOperationException($"Settings overflow: left={settingsBounds.Left}, right={settingsBounds.Right}, window={Root.ActualWidth}"); await CaptureAsync(Path.Combine(root, "settings.png"));
+            _language = "en"; ApplyLanguage(); _theme = "Light"; Root.RequestedTheme = ElementTheme.Light; UpdateCaption(); Settings_Click(this, new RoutedEventArgs()); await Task.Delay(150);
+            if (MainMenu.Items[0].Title != "File" || !SettingsContent.Children.OfType<TextBlock>().Any(t => t.Text == "Settings")) throw new InvalidOperationException("English UI did not apply");
+            await CaptureAsync(Path.Combine(root, "settings-light-en.png"));
+            var scale = Root.XamlRoot.RasterizationScale; AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(900 * scale), (int)(650 * scale))); await Task.Delay(150);
+            var narrow = SettingsContent.TransformToVisual(Root).TransformBounds(new Windows.Foundation.Rect(0, 0, SettingsContent.ActualWidth, SettingsContent.ActualHeight));
+            if (narrow.Left < 0 || narrow.Right > Root.ActualWidth + 1) throw new InvalidOperationException("Narrow settings overflow");
+            SaveSettings(); _language = "zh"; LoadSettings(); if (_language != "en" || !Editor.ShowLineNumbers) throw new InvalidOperationException("Preferences did not persist");
+            _language = "zh"; _theme = "Dark"; Root.RequestedTheme = ElementTheme.Dark; ApplyLanguage(); UpdateCaption();
             Home_Click(this, new RoutedEventArgs()); await Task.Delay(150); await CaptureAsync(Path.Combine(root, "welcome.png"));
             Back_Click(this, new RoutedEventArgs());
-            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.1.0" }));
+            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.1.8" }));
         }
         catch (Exception error) { await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = false, error = error.ToString() })); }
         if (_args.Contains("--smoke-exit")) { _closing = true; await DisposeProjectAsync(); Close(); }

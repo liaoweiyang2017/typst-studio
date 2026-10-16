@@ -1,6 +1,6 @@
 # Typst Studio for Windows
 
-Windows 0.1.0 uses a native WinUI 3 interface, a persistent Tinymist process, and PDFium rendering. The macOS application continues to use SwiftUI/AppKit/PDFKit.
+Windows 0.1.8 uses a native WinUI 3 interface, a persistent Tinymist process, and PDFium rendering. The macOS application continues to use SwiftUI/AppKit/PDFKit.
 
 ## Features
 
@@ -8,14 +8,16 @@ Windows 0.1.0 uses a native WinUI 3 interface, a persistent Tinymist process, an
 - A continuous three-pane workspace with thin separators, without rounded cards around source or PDF.
 
 - Open a project folder or Typst file, automatically choose main.typ, filter and navigate source files.
-- Native plain-text editing with undo/redo, find, font sizing and plain-text paste. Unsaved buffers are retained when switching source files; switching resets the visible editor's undo history.
+- Native Scintilla editing with Typst syntax highlighting and optional line numbers, undo/redo, find, font sizing and plain-text paste. Unsaved buffers are retained when switching source files; switching resets the visible editor's undo history.
 - Debounced in-memory compilation. Failed builds keep the previous PDF and prevent exporting stale output.
 - Continuous PDF preview with fit width, zoom, visible-page rendering, text selection/copy, and source-map navigation.
 - Ctrl+Shift+J maps the source cursor to PDF; Ctrl+click PDF or select text and press Ctrl+Alt+J maps back. The main preview remains active when editing an included file.
 - Atomic saves preserve CRLF/LF; external disk conflicts are reported rather than overwritten. Save Copy preserves a separate copy of the current text.
-- Native light/dark/system appearance, recent projects and per-user settings.
+- English/Simplified Chinese, native light/dark/system appearance including the title bar, adjustable editor/PDF split, recent projects and per-user settings.
+- Configurable line-comment shortcut (Ctrl+/ by default), wrapping, font size, automatic compilation and typing delay. PDF standard/night/soft-green display modes do not alter exported files.
+- English/Chinese installer with an optional desktop shortcut.
 
-The first Windows release focuses on editing, compiling and preview. Package/library sources outside the opened project are not automatically opened. Unrendered syntax may have no mapped page position. Distribution packages include .NET, WinUI, Tinymist and PDFium; no compiler download is needed on first launch. Typst package imports may use the standard package cache/network.
+The Windows version focuses on editing, compiling and preview. Package/library sources outside the opened project are not automatically opened. Unrendered syntax may have no mapped page position. Distribution packages include .NET, WinUI, Tinymist and PDFium; no compiler download is needed on first launch. Typst package imports may use the standard package cache/network.
 
 ## Build
 
@@ -37,4 +39,4 @@ The app's `--smoke <owned-fixture-directory>` mode drives the real WinUI editor 
 
 ## Source and releases
 
-Source stays in the private typst-studio repository. Windows releases use `windows-v0.1.0` tags in the public distribution repository and do not replace the macOS Sparkle latest feed. Windows 0.1.0 packages are not Authenticode-signed.
+Source stays in the private typst-studio repository. Windows releases use `windows-v0.1.8` tags in the public distribution repository and do not replace the macOS Sparkle latest feed. Windows 0.1.8 packages are not Authenticode-signed.

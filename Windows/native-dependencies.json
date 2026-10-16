@@ -14,5 +14,7 @@
       "pdfium_archive_sha256": "51621bcc1d9be9ea448f4b84b0516862b928e3968d3fca899af1a6d6e2848d6d",
       "pdfium_dll_sha256": "ae913f407e8d3f5cdbf08a9869564d647b13e132e01eb376c0a5a33b7a227a45"
     }
-  }
+  },
+  "winuiedit_version": "0.0.5-prerelease",
+  "winuiedit_nuget_sha256": "a0a0975bf37e17f45ee24c352ababbb4b994ae804d6b91ebb7f596ebd59480b5"
 }

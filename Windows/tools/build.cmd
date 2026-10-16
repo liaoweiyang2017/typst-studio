@@ -19,5 +19,6 @@ dotnet build src\TypstStudio.App\TypstStudio.App.csproj -c Release -r win-%ARCH%
 if errorlevel 1 exit /b 1
 dotnet publish src\TypstStudio.App\TypstStudio.App.csproj -c Release -r win-%ARCH% -p:Platform=%PLATFORM% -p:PlatformTarget=%PLATFORM% --no-build --no-restore -o artifacts\win-%ARCH%
 if errorlevel 1 exit /b 1
+del /q "artifacts\win-%ARCH%\*.pdb" 2>nul
 for %%F in (TypstStudio.App.exe TypstStudio.App.pri App.xbf MainWindow.xbf tinymist.exe pdfium.dll Microsoft.UI.Xaml.dll coreclr.dll) do if not exist "artifacts\win-%ARCH%\%%F" (echo Missing publish artifact %%F & exit /b 1)
 exit /b 0

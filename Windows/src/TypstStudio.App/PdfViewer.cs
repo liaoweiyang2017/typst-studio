@@ -26,10 +26,35 @@ public sealed class PdfViewer : Grid
     private int _selectionPage;
     public event Action<int, double, double>? SourceRequested;
     public event Action<string>? Error;
+    public event Action<int, int>? PageChanged;
+    private string _colorMode = "Standard";
+    private bool _fitPage;
+    public int CurrentPage
+    {
+        get { double y = 12; for (var i = 0; i < _pages.Count; i++) { y += _pages[i].Host.Height + 12; if (y > _scroll.VerticalOffset + 40) return i + 1; } return _pages.Count; }
+    }
+    public void MovePage(int delta)
+    { if (_pages.Count == 0) return; var index = Math.Clamp(CurrentPage - 1 + delta, 0, _pages.Count - 1); _scroll.ChangeView(null, _pages.Take(index).Sum(p => p.Host.Height + 12), null, true); }
+    public void FitPage() { _fitPage = true; _zoom = 1; LayoutPages(); ScheduleRender(); }
+    public void SetColorMode(string mode)
+    {
+        if (_colorMode == mode) return; _colorMode = mode; _generation++; _render.Cancel(); _render.Dispose(); _render = new(); _renderedWidths.Clear(); ScheduleRender();
+    }
+    private static PdfPixels ApplyColor(PdfPixels pixels, string mode)
+    {
+        if (mode == "Standard") return pixels;
+        var data = pixels.Bgra;
+        for (var i = 0; i < data.Length; i += 4)
+        {
+            if (mode == "Night") { data[i] = (byte)(235 - data[i] * 0.78); data[i + 1] = (byte)(235 - data[i + 1] * 0.78); data[i + 2] = (byte)(235 - data[i + 2] * 0.78); }
+            else { data[i] = (byte)(data[i] * 0.80); data[i + 1] = (byte)(data[i + 1] * 0.90); data[i + 2] = (byte)(data[i + 2] * 0.79); }
+        }
+        return pixels;
+    }
     public PdfViewer()
     {
         _scroll.Content = _stack; Children.Add(_scroll);
-        _scroll.ViewChanged += (_, _) => ScheduleRender();
+        _scroll.ViewChanged += (_, _) => { PageChanged?.Invoke(CurrentPage, _pages.Count); ScheduleRender(); };
         SizeChanged += (_, _) => { LayoutPages(); ScheduleRender(); };
     }
     public async Task SetDocumentAsync(byte[] bytes)
@@ -58,18 +83,19 @@ public sealed class PdfViewer : Grid
             var menu = new MenuFlyout(); var source = new MenuFlyoutItem { Text = "在源码中定位 (Ctrl+单击)" };
             source.Click += (_, _) => { if (_selection != null && _selectionPage == page) SourceRequested?.Invoke(page, _selection.Left + _selection.Width / 2, _selection.Top + _selection.Height / 2); };
             var copy = new MenuFlyoutItem { Text = "复制选中文字" }; copy.Click += (_, _) => CopySelection();
-            menu.Opening += (_, _) => { source.IsEnabled = copy.IsEnabled = _selection != null && _selectionPage == page; };
+            menu.Opening += (_, _) => { source.Text = UiText.T("在源码中定位 (Ctrl+单击)", "Go to source (Ctrl+click)"); copy.Text = UiText.T("复制选中文字", "Copy selected text"); source.IsEnabled = copy.IsEnabled = _selection != null && _selectionPage == page; };
             menu.Items.Add(source); menu.Items.Add(copy); host.ContextFlyout = menu;
             _pages.Add((host, image, marker)); _stack.Children.Add(host);
         }
-        LayoutPages(); _scroll.UpdateLayout(); _scroll.ChangeView(null, offset, null, true); ScheduleRender();
+        PageChanged?.Invoke(CurrentPage, _pages.Count); LayoutPages(); _scroll.UpdateLayout(); _scroll.ChangeView(null, offset, null, true); ScheduleRender();
     }
-    public void Zoom(double factor) { _zoom = Math.Clamp(_zoom * factor, 0.4, 3); LayoutPages(); ScheduleRender(); }
-    public void FitWidth() { _zoom = 1; LayoutPages(); ScheduleRender(); }
+    public void Zoom(double factor) { if (_fitPage && _pages.Count > 0) _zoom = _pages[0].Host.Width / Math.Max(100, ActualWidth - 28); _fitPage = false; _zoom = Math.Clamp(_zoom * factor, 0.4, 3); LayoutPages(); ScheduleRender(); }
+    public void FitWidth() { _fitPage = false; _zoom = 1; LayoutPages(); ScheduleRender(); }
     private void LayoutPages()
     {
         if (_document == null || ActualWidth < 50) return;
-        var width = Math.Max(100, ActualWidth - 36) * _zoom;
+        var width = Math.Max(100, ActualWidth - 28) * _zoom;
+        if (_fitPage) width = Math.Min(width, Math.Max(100, ActualHeight - 24) * _document.Pages[0].Width / _document.Pages[0].Height);
         for (var i = 0; i < _pages.Count; i++)
         { var size = _document.Pages[i]; _pages[i].Host.Width = width; _pages[i].Host.Height = width * size.Height / size.Width; _pages[i].Marker.Children.Clear(); }
         _scroll.HorizontalScrollBarVisibility = _zoom > 1 ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
@@ -77,7 +103,7 @@ public sealed class PdfViewer : Grid
     private async void ScheduleRender()
     {
         var document = _document; if (document == null) return;
-        var generation = _generation; var token = _render.Token;
+        var generation = _generation; var token = _render.Token; var mode = _colorMode;
         try
         {
             await _renderGate.WaitAsync(token);
@@ -96,7 +122,7 @@ public sealed class PdfViewer : Grid
                 {
                     var width = Math.Clamp((int)Math.Ceiling(_pages[index].Host.Width * (XamlRoot?.RasterizationScale ?? 1)), 100, 4096);
                     if (_renderedWidths.GetValueOrDefault(index) == width) continue;
-                    var pixels = await Task.Run(() => document.Render(index, width, token), token);
+                    var pixels = await Task.Run(() => ApplyColor(document.Render(index, width, token), mode), token);
                     if (generation != _generation) return;
                     var bitmap = new WriteableBitmap(pixels.Width, pixels.Height);
                     using (var stream = bitmap.PixelBuffer.AsStream()) await stream.WriteAsync(pixels.Bgra, token);
@@ -164,5 +190,5 @@ public sealed class PdfViewer : Grid
         SourceRequested?.Invoke(_selectionPage, _selection.Left + _selection.Width / 2, _selection.Top + _selection.Height / 2); return true;
     }
     public async Task WaitForRenderAsync() { await _renderGate.WaitAsync(); _renderGate.Release(); }
-    public void Close() { _generation++; _render.Cancel(); _stack.Children.Clear(); _pages.Clear(); _renderedWidths.Clear(); var document = _document; _document = null; if (document != null) _ = Task.Run(document.Dispose); }
+    public void Close() { _generation++; _render.Cancel(); _stack.Children.Clear(); _pages.Clear(); _renderedWidths.Clear(); var document = _document; _document = null; PageChanged?.Invoke(0, 0); if (document != null) _ = Task.Run(document.Dispose); }
 }

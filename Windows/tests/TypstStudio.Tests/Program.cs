@@ -1,6 +1,15 @@
 using System.Diagnostics;
 using TypstStudio.Core;
 static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+var commentSource = "  中文 $ alpha $\n  #let x = 2\nnext";
+var comment = TypstEditing.ToggleComment(commentSource, 0, commentSource.IndexOf("next", StringComparison.Ordinal));
+var commented = commentSource.Remove(comment.Start, comment.Length).Insert(comment.Start, comment.Text);
+Check(commented == "  // 中文 $ alpha $\n  // #let x = 2\nnext", "Comment selection ending at next line start");
+var uncomment = TypstEditing.ToggleComment(commented, 0, commented.IndexOf("next", StringComparison.Ordinal));
+Check(commented.Remove(uncomment.Start, uncomment.Length).Insert(uncomment.Start, uncomment.Text) == commentSource, "Comment toggle round trip");
+var spans = TypstEditing.Highlight("#let a = \"/* string */\"\n/* outer /* nested */ end */\n$ alpha + 2 $\n= 标题");
+Check(spans.Any(s => s.Style == 1) && spans.Any(s => s.Style == 2) && spans.Any(s => s.Style == 3) && spans.Any(s => s.Style == 5) && spans.Any(s => s.Style == 7), "Typst highlights strings, nested comments, keyword, math and headings");
+Console.WriteLine("PASS: syntax spans and reversible multi-line comments");
 var root = Path.Combine(Path.GetTempPath(), "TypstStudio-tests-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 try
