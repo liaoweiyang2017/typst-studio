@@ -4,3 +4,7 @@ tools/
 .DS_Store
 analysis/
 Resources/icon-variants/
+Windows/**/bin/
+Windows/**/obj/
+Windows/native/
+Windows/artifacts/

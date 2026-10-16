@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup>
+  <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows10.0.26100.0</TargetFramework><TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+  <UseWinUI>true</UseWinUI><WinUISDKReferences>false</WinUISDKReferences><WindowsPackageType>None</WindowsPackageType>
+  <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained><SelfContained>true</SelfContained><RuntimeIdentifier>win-arm64</RuntimeIdentifier>
+  <Platforms>ARM64;x64</Platforms><PlatformTarget>ARM64</PlatformTarget><ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>Assets/Studio.ico</ApplicationIcon><PublishTrimmed>false</PublishTrimmed>
+ </PropertyGroup>
+ <ItemGroup>
+  <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.6" />
+  <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.6" />
+  <ProjectReference Include="../TypstStudio.Core/TypstStudio.Core.csproj" />
+  <Content Update="Assets/Studio.png;Assets/Studio.ico" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../native/$(RuntimeIdentifier)/tinymist.exe;../../native/$(RuntimeIdentifier)/pdfium.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../licenses/*" Link="Licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+ </ItemGroup>
+ <!-- Modular WinUI builds produce XBF/PRI files that must be included explicitly in unpackaged publish output. -->
+ <Target Name="IncludeWinUiResourcesInPublish" AfterTargets="ComputeFilesToPublish">
+  <Error Condition="!Exists('$(TargetDir)$(AssemblyName).pri')" Text="Missing WinUI resource index. Build before publishing." />
+  <ItemGroup>
+   <_StudioResources Include="$(TargetDir)**/*.xbf;$(TargetDir)$(AssemblyName).pri" />
+   <ResolvedFileToPublish Include="@(_StudioResources)" Exclude="@(ResolvedFileToPublish)">
+    <RelativePath>%(_StudioResources.RecursiveDir)%(_StudioResources.Filename)%(_StudioResources.Extension)</RelativePath>
+    <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+   </ResolvedFileToPublish>
+  </ItemGroup>
+ </Target>
+</Project>

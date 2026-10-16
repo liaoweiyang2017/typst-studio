@@ -1,0 +1,18 @@
+{
+  "tinymist_version": "0.15.10",
+  "tinymist_commit": "45b50f0d928e825248fa1c2fcbcd68549e957b5d",
+  "source_map_patch_sha256": "11d40e25d6a091263f90342984ab3b25c993eae4631b3aab641f343479c5ced2",
+  "pdfium_release": "chromium/8100",
+  "architectures": {
+    "arm64": {
+      "tinymist_sha256": "7f5d6efa8e519439d9fad192b0b5c45e6316cb6f2fe54837792250d6106e4e75",
+      "pdfium_archive_sha256": "cca9b28d406ae2a902b0b710a92ab699c4c2931564ab6efe44630014d492a9ca",
+      "pdfium_dll_sha256": "9b73b701916dbbca1a7c2ea79b228a9536bbff90bf9ee67e93b3c13b591f0daa"
+    },
+    "x64": {
+      "tinymist_sha256": "4ed225094e71a9b0ac75e1591896165a524d11d601afc32c2b9e3306a1bb1b36",
+      "pdfium_archive_sha256": "51621bcc1d9be9ea448f4b84b0516862b928e3968d3fca899af1a6d6e2848d6d",
+      "pdfium_dll_sha256": "ae913f407e8d3f5cdbf08a9869564d647b13e132e01eb376c0a5a33b7a227a45"
+    }
+  }
+}

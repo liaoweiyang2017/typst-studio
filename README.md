@@ -40,3 +40,7 @@ Public downloads: https://github.com/liaoweiyang2017/typst-studio-releases/relea
 After local build/tests and DMG packaging, run `scripts/publish-release.sh`. The release script signs the archive using the local Keychain and uploads the Sparkle appcast. The public repository Action verifies the signature and checksum and generates the legacy `update.json`; check its successful run before announcing a release. No private-source access token is used by that workflow.
 
 Windows migration remains analysis only: [WinUI 3 assessment](docs/Windows-WinUI3-assessment.md).
+
+## Windows
+
+Windows 0.1.0 uses a native WinUI 3 interface with a persistent Tinymist backend and PDFium preview. See [Windows documentation](Windows/README.md) for builds, source-map navigation, and known limitations. macOS continues to use the Swift native application. Windows installers use separate `windows-v0.1.0` releases.

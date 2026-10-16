@@ -1,0 +1,7 @@
+Typst Studio Windows 0.1.0
+
+WinUI 3 / Windows App SDK: Microsoft. See WINDOWS-APP-SDK-LICENSE.txt.
+.NET runtime: Microsoft and contributors. See DOTNET-LICENSE.txt and DOTNET-THIRD-PARTY-NOTICES.txt.
+Tinymist 0.15.10: Apache-2.0; upstream commit 45b50f0d928e825248fa1c2fcbcd68549e957b5d. Modified using the source-map patch in the private application's source repository. Includes Typst 0.15.1 and its upstream dependencies. See Tinymist-LICENSE.txt.
+PDFium: Chromium contributors, packaged by bblanchon/pdfium-binaries at chromium/8100, without V8. See PDFium-LICENSE.txt and accompanying dependency licenses.
+HarborFiles and TeXstudio were used as design/behavior references. No TeXstudio source code is incorporated.
