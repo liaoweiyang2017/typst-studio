@@ -24,7 +24,7 @@ public static class TypstEditing
             else if (c == '#' || char.IsLetter(c) || c == '_')
             { if (c == '#') i++; while (i < text.Length && (char.IsLetterOrDigit(text[i]) || text[i] is '_' or '-')) i++; if (i == start) i++; var word = text[(c == '#' ? start + 1 : start)..i]; style = Keywords.Contains(word) ? 3 : c == '#' || (i < text.Length && text[i] == '(') ? 4 : math ? 5 : 0; }
             else if (char.IsDigit(c)) { i++; while (i < text.Length && (char.IsDigit(text[i]) || text[i] == '.')) i++; style = 6; }
-            else if (c == '=' && (i == 0 || text[i - 1] == '\n')) { while (i < text.Length && text[i] != '\n') i++; style = 7; }
+            else if (!math && c == '=' && (i == 0 || text[i - 1] == '\n')) { while (i < text.Length && text[i] != '\n') i++; style = 7; }
             else { i++; style = math ? 5 : 0; }
             if (style != 0) spans.Add(new(start, i - start, style));
         }

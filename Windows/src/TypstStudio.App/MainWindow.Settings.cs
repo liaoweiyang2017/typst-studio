@@ -49,13 +49,13 @@ public sealed partial class MainWindow
         var reset = new Button { Content = T("恢复均分", "Equal widths"), Width = 170 }; reset.Click += ResetSplit_Click;
         Row(Symbol.TwoPage, T("源码与 PDF 分栏", "Editor / PDF split"), T("拖动中间分隔线调整宽度，自动记住比例。", "Drag the divider; the ratio is remembered."), reset);
         Row(Symbol.Find, T("双向定位", "Source mapping"), T("源码 Ctrl+Shift+J；PDF 中 Ctrl+单击公式或选中文字后 Ctrl+Alt+J。", "Source: Ctrl+Shift+J. PDF: Ctrl+click, or select text and press Ctrl+Alt+J."));
-        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.1.8", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
+        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.1.9", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
         ShowPage(SettingsPage);
     }
     private void ApplyLanguage()
     {
         UiText.English = _language == "en" || (_language == "System" && !System.Globalization.CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase));
-        UiText.Apply(Root); UiText.Apply(MainMenu); RefreshRecent(); UpdateTitle(); Editor_SelectionChanged(this, new RoutedEventArgs()); SetStatus(T("就绪。", "Ready."));
+        UiText.Apply(Root); UiText.Apply(MainMenu); RefreshSidebarLabels(); RefreshRecent(); UpdateTitle(); Editor_SelectionChanged(this, new RoutedEventArgs()); SetStatus(T("就绪。", "Ready."));
     }
     private void SetCommentShortcut()
     {

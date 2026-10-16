@@ -43,4 +43,4 @@ Windows migration remains analysis only: [WinUI 3 assessment](docs/Windows-WinUI
 
 ## Windows
 
-Windows 0.1.8 uses a native WinUI 3 interface with a persistent Tinymist backend and PDFium preview. See [Windows documentation](Windows/README.md) for builds, source-map navigation, and known limitations. macOS continues to use the Swift native application. Windows installers use separate `windows-v0.1.8` releases.
+Windows 0.1.9 uses a native WinUI 3 interface with a persistent Tinymist backend and PDFium preview. See [Windows documentation](Windows/README.md) for builds, source-map navigation, and known limitations. macOS continues to use the Swift native application. Windows installers use separate `windows-v0.1.9` releases.

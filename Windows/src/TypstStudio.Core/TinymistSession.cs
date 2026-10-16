@@ -21,7 +21,8 @@ public sealed class TinymistSession : IAsyncDisposable
     public string Entry { get; }
     public event Action<string>? DiagnosticChanged;
     public event Action<string>? Failed;
-    private readonly ConcurrentDictionary<string, string> _diagnostics = new();
+    private readonly ConcurrentDictionary<string, CompilerProblem[]> _diagnostics = new();
+    public IReadOnlyList<CompilerProblem> Problems => _diagnostics.Values.SelectMany(p => p).OrderBy(p => p.Path).ThenBy(p => p.Line).ToArray();
     public TinymistSession(string executable, string root, string entry)
     {
         Root = Path.GetFullPath(root); Entry = Path.GetFullPath(entry);
@@ -136,8 +137,12 @@ public sealed class TinymistSession : IAsyncDisposable
         else if (method == "textDocument/publishDiagnostics")
         {
             var uri = p.GetProperty("uri").GetString()!;
-            _diagnostics[uri] = string.Join("\n", p.GetProperty("diagnostics").EnumerateArray().Select(d => $"{new Uri(uri).LocalPath}:{d.GetProperty("range").GetProperty("start").GetProperty("line").GetInt32() + 1}: {d.GetProperty("message").GetString()}"));
-            DiagnosticChanged?.Invoke(string.Join("\n", _diagnostics.Values.Where(s => s.Length > 0)));
+            var path = new Uri(uri).IsFile ? new Uri(uri).LocalPath : uri;
+            _diagnostics[uri] = p.GetProperty("diagnostics").EnumerateArray().Select(d => {
+                var start = d.GetProperty("range").GetProperty("start");
+                return new CompilerProblem(path, start.GetProperty("line").GetInt32(), start.GetProperty("character").GetInt32(), d.GetProperty("message").GetString() ?? "", d.TryGetProperty("severity", out var severity) ? severity.GetInt32() : 1);
+            }).ToArray();
+            DiagnosticChanged?.Invoke(string.Join("\n", Problems.Select(d => $"{d.Path}:{d.Line + 1}: {d.Message}")));
         }
     }
     public async ValueTask DisposeAsync() { _lifetime.Cancel(); _socket?.Abort(); _socket?.Dispose(); await _lsp.DisposeAsync(); _lifetime.Dispose(); }

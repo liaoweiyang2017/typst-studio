@@ -22,7 +22,7 @@ internal static class UiText
     { if (English) return Labels.GetValueOrDefault(value, value); foreach (var pair in Labels) if (pair.Value == value) return pair.Key; return value; }
     public static void Apply(DependencyObject root)
     {
-        if (root is SourceEditor or TreeView) return;
+        if (root is SourceEditor or TreeView || root is FrameworkElement { Name: "SidebarTools" or "RecentProjects" }) return;
         if (root is TextBlock text) text.Text = Translate(text.Text);
         if (root is Button button && button.Content is string content) button.Content = Translate(content);
         if (root is AutoSuggestBox search) search.PlaceholderText = Translate(search.PlaceholderText);

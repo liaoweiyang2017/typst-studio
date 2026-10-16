@@ -34,7 +34,7 @@ public sealed partial class MainWindow : Window
     private static extern uint GetDpiForWindow(nint window);
     public MainWindow()
     {
-        App.Trace("Main XAML loading"); InitializeComponent(); App.Trace("Main XAML loaded");
+        App.Trace("Main XAML loading"); InitializeComponent(); InitializeSidebar(); App.Trace("Main XAML loaded");
         var dpi = Math.Max(1, GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0);
         var work = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary).WorkArea;
         var width = Math.Min((int)(1200 * dpi), work.Width - 48); var height = Math.Min((int)(800 * dpi), work.Height - 48);
@@ -95,7 +95,7 @@ public sealed partial class MainWindow : Window
         if (!confirmed && !await ConfirmUnsavedAsync()) return;
         ShowPage(Workspace); _opening = true; Editor.IsEnabled = false; Files.IsEnabled = false;
         try {
-        await DisposeProjectAsync(); _disposed = false; _buffers.Clear(); _current = null; Editor.IsReadOnly = true; SetEditorText(""); UpdateTitle(); _pdf = null; _pdfRevision = -1;
+        await DisposeProjectAsync(); SidebarPicker.SelectedIndex = 0; _projectQuery.Text = ""; _searchResults.ItemsSource = null; _outlineTree.RootNodes.Clear(); _disposed = false; _buffers.Clear(); _current = null; Editor.IsReadOnly = true; SetEditorText(""); UpdateTitle(); _pdf = null; _pdfRevision = -1;
         _root = Path.GetFullPath(root); _revision++; Busy.IsActive = true; SetStatus(UiText.T("正在读取工程…", "Reading project\u2026"));
         _sources = await Task.Run(() => ProjectFiles.Sources(_root));
         if (_disposed) return;
@@ -103,7 +103,8 @@ public sealed partial class MainWindow : Window
         BuildTree();
         if (_entry == null) { Busy.IsActive = false; SetStatus(UiText.T("文件夹中没有 .typ 文件，请新建文档。", "No .typ files in this folder. Create a document to begin.")); return; }
         _session = new(Path.Combine(AppContext.BaseDirectory, "tinymist.exe"), _root, _entry);
-        _session.DiagnosticChanged += message => DispatcherQueue.TryEnqueue(() => { _diagnostics = message; ProblemsButton.Content = UiText.Translate(string.IsNullOrWhiteSpace(message) ? "无问题" : "查看问题"); });
+        var observedSession = _session;
+        _session.DiagnosticChanged += message => DispatcherQueue.TryEnqueue(() => { if (_session != observedSession) return; _diagnostics = message; if (SidebarPicker.SelectedIndex == 4) _ = RefreshSidebarAsync(); ProblemsButton.Content = UiText.Translate(string.IsNullOrWhiteSpace(message) ? "无问题" : "查看问题"); });
         _session.Failed += message => DispatcherQueue.TryEnqueue(() => SetStatus(UiText.T("编译服务已退出。请重新打开工程。 ", "The compiler stopped. Reopen the project. ") + message));
         await _session.InitializeAsync();
         await OpenBufferAsync(selected ?? _entry);
@@ -142,7 +143,7 @@ public sealed partial class MainWindow : Window
         if (!ProjectFiles.Inside(_root!, path)) throw new IOException(UiText.T("只打开当前工程内的源文件。", "Only source files within the current project can be opened."));
         var epoch = ++_fileEpoch;
         if (!_buffers.TryGetValue(path, out var buffer)) { buffer = new(path, await File.ReadAllTextAsync(path)); if (epoch != _fileEpoch || _disposed) return; _buffers[path] = buffer; }
-        Editor.ActivateEditor(); _current = buffer; SetEditorText(buffer.Text); Editor.IsReadOnly = false; UpdateTitle(); Editor.Focus(FocusState.Programmatic);
+        Editor.ActivateEditor(); _current = buffer; SetEditorText(buffer.Text); Editor.IsReadOnly = false; UpdateTitle(); Editor.Focus(FocusState.Programmatic); if (SidebarPicker.SelectedIndex is 2 or 3) _ = RefreshSidebarAsync();
     }
     private void SetEditorText(string text)
     {
@@ -175,7 +176,7 @@ public sealed partial class MainWindow : Window
     {
         if (_settingText || _current == null) return;
         var text = EditorText(); if (text == _current.Text) return;
-        _current.Text = text; UpdateTitle(); ScheduleCompile();
+        _current.Text = text; UpdateTitle(); ScheduleCompile(); if (SidebarPicker.SelectedIndex == 1) _ = RefreshSidebarAsync();
     }
     private void Editor_SelectionChanged(object sender, RoutedEventArgs e)
     {
@@ -211,12 +212,12 @@ public sealed partial class MainWindow : Window
             if (revision != _revision || session != _session) return;
             if (_pdf == null || !pdf.AsSpan().SequenceEqual(_pdf)) await Preview.SetDocumentAsync(pdf);
             if (revision != _revision || session != _session) return;
-            _pdf = pdf; _pdfRevision = revision; PdfTitle.Text = "主文档 · " + Path.GetFileName(_entry);
+            _compileError = ""; _pdf = pdf; _pdfRevision = revision; if (SidebarPicker.SelectedIndex is 2 or 4) _ = RefreshSidebarAsync(); PdfTitle.Text = "主文档 · " + Path.GetFileName(_entry);
             SetStatus(UiText.English ? $"Compiled · {watch.Elapsed.TotalMilliseconds:F0} ms · Ctrl+click PDF to locate source" : $"编译完成 · {watch.Elapsed.TotalMilliseconds:F0} ms · Ctrl+单击 PDF 可跳转源码");
         }
         catch (OperationCanceledException) { }
-        catch (Exception error) { if (revision == _revision) { _pdfRevision = -1; SetStatus(UiText.T("编译失败，保留上次预览。 ", "Compilation failed; previous preview retained. ") + error.Message); } }
-        finally { if (revision == _revision) Busy.IsActive = false; }
+        catch (Exception error) { if (revision == _revision) { _pdfRevision = -1; _compileError = error.Message; if (SidebarPicker.SelectedIndex == 4) _ = RefreshSidebarAsync(); ProblemsButton.Content = UiText.Translate("查看问题"); SetStatus(UiText.T("编译失败，请查看编译问题；保留上次预览。", "Compilation failed. See Problems; the previous preview is retained.")); } }
+        finally { if (revision == _revision) { Busy.IsActive = false; if (SidebarPicker.SelectedIndex == 4) _ = RefreshSidebarAsync(); } }
     }
     private async Task ForwardAsync()
     {
@@ -296,7 +297,7 @@ public sealed partial class MainWindow : Window
     private void ZoomOut_Click(object sender, RoutedEventArgs e) => Preview.Zoom(0.85);
     private void ZoomIn_Click(object sender, RoutedEventArgs e) => Preview.Zoom(1.15);
     private void Fit_Click(object sender, RoutedEventArgs e) => Preview.FitWidth();
-    private async void Problems_Click(object sender, RoutedEventArgs e) => await ShowMessageAsync("编译问题", string.IsNullOrWhiteSpace(_diagnostics) ? "没有编译问题。" : _diagnostics);
+    private void Problems_Click(object sender, RoutedEventArgs e) { ShowPage(Workspace); SidebarPicker.SelectedIndex = 4; _ = RefreshSidebarAsync(); }
     private async void Find_Click(object sender, RoutedEventArgs e)
     {
         var query = new TextBox { PlaceholderText = UiText.Translate("查找当前源码") };
@@ -342,7 +343,7 @@ public sealed partial class MainWindow : Window
     }
     private async Task SafeAsync(Func<Task> action) { try { await action(); } catch (Exception error) { Busy.IsActive = false; SetStatus(error.Message); } }
     private async Task DisposeProjectAsync()
-    { _disposed = true; _revision++; _fileEpoch++; _compile.Cancel(); _navigation.Cancel(); _watcher?.Dispose(); _watcher = null; if (_session != null) await _session.DisposeAsync(); _session = null; Preview.Close(); }
+    { _sidebarWork.Cancel(); _compileError = _diagnostics = ""; _disposed = true; _revision++; _fileEpoch++; _compile.Cancel(); _navigation.Cancel(); _watcher?.Dispose(); _watcher = null; if (_session != null) await _session.DisposeAsync(); _session = null; Preview.Close(); }
     private async Task WaitForCompileAsync(string? expectedText = null)
     {
         for (var i = 0; i < 300; i++) { if (_pdfRevision == _revision && !Busy.IsActive && (expectedText == null || _current?.Text == expectedText)) return; await Task.Delay(50); }
@@ -350,6 +351,7 @@ public sealed partial class MainWindow : Window
     }
     private async Task CaptureAsync(string path)
     {
+            Root.UpdateLayout(); await Task.Delay(100);
             var bitmap = new Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap(); await bitmap.RenderAsync(Root);
             var pixels = await bitmap.GetPixelsAsync();
             using (var stream = File.OpenWrite(path))
@@ -363,7 +365,9 @@ public sealed partial class MainWindow : Window
         var report = Path.Combine(root, "native-smoke.json");
         try
         {
+            if (SidebarPicker.Items.Count != 5 || SidebarPicker.SelectedIndex != 0) throw new InvalidOperationException("Sidebar must default to project files with five choices");
             await OpenProjectAsync(root, confirmed: true);
+            if (_watcher != null) _watcher.EnableRaisingEvents = false; // Smoke screenshots must not trigger asset recompilation.
             if (_pdf == null || _current == null) throw new InvalidOperationException("Initial compile failed: " + Status.Text);
             var offset = _current.Text.IndexOf("alpha", StringComparison.Ordinal); SelectSource(offset, 5);
             await ForwardAsync(); if (!Status.Text.Contains("已定位") && !Status.Text.Contains("Located")) throw new InvalidOperationException(Status.Text);
@@ -400,7 +404,29 @@ public sealed partial class MainWindow : Window
             _language = "zh"; _theme = "Dark"; Root.RequestedTheme = ElementTheme.Dark; ApplyLanguage(); UpdateCaption();
             Home_Click(this, new RoutedEventArgs()); await Task.Delay(150); await CaptureAsync(Path.Combine(root, "welcome.png"));
             Back_Click(this, new RoutedEventArgs());
-            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.1.8" }));
+            SidebarPicker.SelectedIndex = 1; _projectQuery.Text = "alpha";
+            for (var i = 0; i < 80 && (_searchResults.ItemsSource is not SidebarRow[] results || results.Length < 2); i++) await Task.Delay(25);
+            if (_searchResults.ItemsSource is not SidebarRow[] hits || hits.Length < 2) throw new InvalidOperationException("Project search is missing cross-file results");
+            if (_buffers.Values.Any(b => b.Dirty)) throw new InvalidOperationException("Switching panels must not modify source buffers");
+            await CaptureAsync(Path.Combine(root, "sidebar-search.png"));
+            if (_searchResults.ContainerFromIndex(0) == null) throw new InvalidOperationException("Search results must be visible");
+            SidebarPicker.SelectedIndex = 2; await RefreshSidebarAsync();
+            if (_outlineTree.RootNodes.Count < 2 || !_outlineTree.RootNodes.All(n => n.IsExpanded)) throw new InvalidOperationException("Compiled outline must be expanded");
+            await CaptureAsync(Path.Combine(root, "sidebar-outline.png"));
+            SidebarPicker.SelectedIndex = 3; _symbolQuery.Text = "integral"; FilterSymbols();
+            if (_symbolList.Items.Count < 3) throw new InvalidOperationException("Symbol filtering is missing integral variants");
+            await CaptureAsync(Path.Combine(root, "sidebar-symbols.png"));
+            if (_symbolList.ContainerFromIndex(0) == null) throw new InvalidOperationException("Symbol cells must be visible");
+            SidebarPicker.SelectedIndex = 4; await RefreshSidebarAsync(); await CaptureAsync(Path.Combine(root, "sidebar-problems.png"));
+            _autoCompile = false; SelectSource(Editor.Text.Length, 0); Editor.SelectedText = "\n#set text(font: )"; await CompileNowAsync();
+            for (var i = 0; i < 50 && _session!.Problems.Count == 0; i++) await Task.Delay(20);
+            await RefreshSidebarAsync(); if (_problemList.Items.Count == 0) throw new InvalidOperationException("Errors must appear in the problems panel");
+            await CaptureAsync(Path.Combine(root, "sidebar-errors.png"));
+            Editor.Undo(); _autoCompile = true; await CompileNowAsync(); await WaitForCompileAsync(previous);
+            for (var i = 0; i < 50 && _session!.Problems.Count > 0; i++) await Task.Delay(20);
+            await RefreshSidebarAsync(); if (_problemList.Items.Count != 0) throw new InvalidOperationException("Fixed errors must disappear");
+            SidebarPicker.SelectedIndex = 0;
+            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.1.9" }));
         }
         catch (Exception error) { await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = false, error = error.ToString() })); }
         if (_args.Contains("--smoke-exit")) { _closing = true; await DisposeProjectAsync(); Close(); }

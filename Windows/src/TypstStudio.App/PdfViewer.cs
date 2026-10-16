@@ -35,6 +35,7 @@ public sealed class PdfViewer : Grid
     }
     public void MovePage(int delta)
     { if (_pages.Count == 0) return; var index = Math.Clamp(CurrentPage - 1 + delta, 0, _pages.Count - 1); _scroll.ChangeView(null, _pages.Take(index).Sum(p => p.Host.Height + 12), null, true); }
+    public Task<IReadOnlyList<PdfHeading>> GetOutlineAsync() { var document = _document; return document == null ? Task.FromResult<IReadOnlyList<PdfHeading>>([]) : Task.Run(document.ReadOutline); }
     public void FitPage() { _fitPage = true; _zoom = 1; LayoutPages(); ScheduleRender(); }
     public void SetColorMode(string mode)
     {

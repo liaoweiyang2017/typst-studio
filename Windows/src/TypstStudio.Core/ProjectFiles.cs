@@ -2,16 +2,17 @@ namespace TypstStudio.Core;
 public static class ProjectFiles
 {
     private static readonly HashSet<string> Excluded = new(StringComparer.OrdinalIgnoreCase) { ".git", "build", "dist", "target", "node_modules", ".vs", "bin", "obj" };
-    public static string[] Sources(string root)
+    public static string[] Sources(string root, CancellationToken token = default)
     {
         var result = new List<string>(); var pending = new Stack<string>(); pending.Push(root);
         while (pending.TryPop(out var directory))
         {
+            token.ThrowIfCancellationRequested();
             try
             {
                 foreach (var path in Directory.EnumerateDirectories(directory))
                     if (!Excluded.Contains(Path.GetFileName(path)) && !File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint)) pending.Push(path);
-                result.AddRange(Directory.EnumerateFiles(directory, "*.typ"));
+                result.AddRange(Directory.EnumerateFiles(directory, "*.typ").Where(p => !Path.GetFileName(p).StartsWith(".typst-studio-", StringComparison.OrdinalIgnoreCase)));
             }
             catch (UnauthorizedAccessException) { } catch (IOException) { }
         }

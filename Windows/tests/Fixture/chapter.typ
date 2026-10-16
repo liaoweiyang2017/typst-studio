@@ -4,3 +4,7 @@
 第二处公式：$ alpha + sqrt(2) $
 
 #rotate(20deg)[$ integral_0^1 x^2 dif x $]
+
+== 二级标题
+
+=== 三级标题

@@ -16,7 +16,7 @@ try
 {
     var main = Path.Combine(root, "main.typ"); var child = Path.Combine(root, "chapter.typ");
     var mainText = "= Main\n$ alpha + sqrt(2) $\n$ frac(1, 2) + integral_0^1 x dif x + sum_(i=0)^3 i $\n#include \"chapter.typ\"";
-    var childText = "#pagebreak()\n= 中文章节\n中文 $ alpha + sqrt(2) $\n#rotate(20deg)[$ beta $]";
+    var childText = "#pagebreak()\n= 中文章节\n中文 $ alpha + sqrt(2) $\n#rotate(20deg)[$ beta $]\n== Nested\n=== Detail";
     await File.WriteAllTextAsync(main, mainText); await File.WriteAllTextAsync(child, childText);
     var bufferPath = Path.Combine(root, "buffer.typ"); await File.WriteAllTextAsync(bufferPath, "one\r\ntwo\r\n");
     var buffer = new SourceBuffer(bufferPath, await File.ReadAllTextAsync(bufferPath));
@@ -30,12 +30,24 @@ try
     var unicode = "🙂e\u0301中文 alpha"; var start = unicode.IndexOf("alpha", StringComparison.Ordinal); var position = SourceCoordinates.Position(unicode, start);
     Check(SourceCoordinates.Offset(unicode, position.Line, position.Column) == start, "Unicode scalar/UTF16 roundtrip");
     Console.WriteLine("PASS: project discovery, Unicode coordinates, atomic save, CRLF and conflict preservation");
+    var search = await ProjectSearch.FindAsync([child], new Dictionary<string, string> { [child] = "中文\nUNSAVED needle" }, "needle", false, CancellationToken.None);
+    Check(search.Count == 1 && search[0].Line == 1 && search[0].Offset == 11, "Search unsaved Unicode source with exact UTF16 offset");
+    Check((await ProjectSearch.FindAsync([child], new Dictionary<string, string> { [child] = "Needle" }, "needle", true, CancellationToken.None)).Count == 0, "Case-sensitive project search");
+    Check((await ProjectSearch.FindAsync([child], new Dictionary<string, string> { [child] = string.Join("\n", Enumerable.Repeat("needle", 250)) }, "needle", false, CancellationToken.None)).Count == 200, "Bounded search results");
+    Check(MathSymbols.Insertion("$ x ", 4, "alpha").Trim() == "alpha", "Symbol inside math");
+    Check(MathSymbols.Insertion("`$` ", 4, "alpha") == "$ alpha $", "Raw dollar does not open math");
+    await File.WriteAllTextAsync(Path.Combine(root, ".typst-studio-live-test.typ"), "temporary");
+    Check(!ProjectFiles.Sources(root).Any(p => Path.GetFileName(p).StartsWith(".typst-studio-")), "Generated snapshots are hidden");
+    Console.WriteLine("PASS: project search, symbol insertion and hidden snapshots");
     await using var engine = new TinymistSession(Path.Combine(AppContext.BaseDirectory, "tinymist.exe"), root, main);
     await engine.InitializeAsync(); var documents = new Dictionary<string, string> { [main] = mainText };
     var timer = Stopwatch.StartNew(); var pdf = await engine.CompileAsync(documents, CancellationToken.None); Console.WriteLine($"Initial compile: {timer.ElapsedMilliseconds} ms");
     using (var document = new PdfDocument(pdf))
     {
         Check(document.Pages.Count == 2, "PDF page count");
+        var outline = document.ReadOutline();
+        Check(outline.Count >= 2 && outline.Any(h => h.Title.Contains("中文") && h.Destination?.Page == 2), "PDF outline includes cross-file Unicode heading and destination");
+        Check(outline.Any(h => h.Children.Any(c => c.Children.Count > 0)), "PDF outline preserves heading levels");
         var pixels = document.Render(1, 900, CancellationToken.None);
         Check(pixels.Bgra.Length == pixels.Width * pixels.Height * 4 && pixels.Bgra.Count(b => b < 200) > 100, "Native PDF pixels");
     }
@@ -63,9 +75,14 @@ try
     Check(await File.ReadAllTextAsync(child) == childText, "Never write unsaved source during compilation");
     documents[child] = "#set text(font: )";
     try { await engine.CompileAsync(documents, CancellationToken.None); throw new Exception("Invalid source exported"); } catch (InvalidOperationException) { }
+    for (var i = 0; i < 50 && engine.Problems.Count == 0; i++) await Task.Delay(20);
+    Check(engine.Problems.Any(p => p.Path == child && p.Line == 0 && p.Message.Length > 0), "Structured diagnostics locate the erroneous source");
     documents[child] = childText; var recovered = await engine.CompileAsync(documents, CancellationToken.None);
     using (var document = new PdfDocument(recovered)) Check(document.Pages.Count == 2, "Recover after compiler error");
     Console.WriteLine("PASS: unsaved dependencies, compiler errors and recovery");
+    documents[main] = string.Join("\n\n", MathSymbols.All.Select(s => "$ " + s.Name + " $"));
+    await engine.CompileAsync(documents, CancellationToken.None);
+    Console.WriteLine("PASS: every palette symbol compiles");
     Console.WriteLine("ARCHITECTURE: " + System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture);
 }
 finally { Directory.Delete(root, recursive: true); }

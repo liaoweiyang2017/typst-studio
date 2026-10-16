@@ -31,6 +31,37 @@ public sealed class PdfDocument : IDisposable
             Pages = pages;
         }
     }
+    public IReadOnlyList<PdfHeading> ReadOutline()
+    {
+        lock (Gate)
+        {
+            ObjectDisposedException.ThrowIf(_document == 0, this);
+            var visited = new HashSet<nint>();
+            List<PdfHeading> Read(nint parent, int depth)
+            {
+                var items = new List<PdfHeading>(); if (depth > 64) return items;
+                for (var mark = Native.FPDFBookmark_GetFirstChild(_document, parent); mark != 0 && visited.Count < 5000 && visited.Add(mark); mark = Native.FPDFBookmark_GetNextSibling(_document, mark))
+                {
+                    var count = Native.FPDFBookmark_GetTitle(mark, null, 0); if (count > 65536) continue;
+                    var bytes = new byte[count]; Native.FPDFBookmark_GetTitle(mark, bytes, count);
+                    var title = System.Text.Encoding.Unicode.GetString(bytes).TrimEnd('\0');
+                    var dest = Native.FPDFBookmark_GetDest(_document, mark); PdfPoint? location = null;
+                    if (dest != 0)
+                    {
+                        var page = Native.FPDFDest_GetDestPageIndex(_document, dest);
+                        if (page >= 0 && page < Pages.Count)
+                        {
+                            var found = Native.FPDFDest_GetLocationInPage(dest, out var hasX, out var hasY, out _, out var x, out var y, out _);
+                            location = new(page + 1, found != 0 && hasX != 0 && float.IsFinite(x) ? x : 0, found != 0 && hasY != 0 && float.IsFinite(y) ? Math.Clamp(Pages[page].Height - y, 0, Pages[page].Height) : 0);
+                        }
+                    }
+                    items.Add(new(title, location, Read(mark, depth + 1)));
+                }
+                return items;
+            }
+            return Read(0, 0);
+        }
+    }
     public PdfPixels Render(int index, int width, CancellationToken token)
     {
         lock (Gate)
@@ -85,6 +116,12 @@ public sealed class PdfDocument : IDisposable
     private static class Native
     {
         private const string Dll = "pdfium";
+        [DllImport(Dll)] internal static extern nint FPDFBookmark_GetFirstChild(nint document, nint bookmark);
+        [DllImport(Dll)] internal static extern nint FPDFBookmark_GetNextSibling(nint document, nint bookmark);
+        [DllImport(Dll)] internal static extern uint FPDFBookmark_GetTitle(nint bookmark, [Out] byte[]? buffer, uint length);
+        [DllImport(Dll)] internal static extern nint FPDFBookmark_GetDest(nint document, nint bookmark);
+        [DllImport(Dll)] internal static extern int FPDFDest_GetDestPageIndex(nint document, nint dest);
+        [DllImport(Dll)] internal static extern int FPDFDest_GetLocationInPage(nint dest, out int hasX, out int hasY, out int hasZoom, out float x, out float y, out float zoom);
         [DllImport(Dll)] internal static extern void FPDF_InitLibrary();
         [DllImport(Dll)] internal static extern nint FPDF_LoadMemDocument64(nint data, nuint size, [MarshalAs(UnmanagedType.LPStr)] string? password);
         [DllImport(Dll)] internal static extern void FPDF_CloseDocument(nint document);
