@@ -80,6 +80,15 @@ final class StudioPDFView: PDFView {
         if pageWidth > 0 { scaleFactor = max(0.1, (bounds.width - 24) / pageWidth) }
     }
     var clickedText: ((String) -> Void)?
+    var navigationTitle = "Show in Source"
+    @objc func showSelectedSource() { activated?(); if let text = currentSelection?.string { clickedText?(text) } }
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+        menu.addItem(.separator())
+        let item = NSMenuItem(title: navigationTitle, action: #selector(showSelectedSource), keyEquivalent: "")
+        item.target = self; item.isEnabled = !(currentSelection?.string?.isEmpty ?? true); menu.addItem(item)
+        return menu
+    }
     override func mouseDown(with event: NSEvent) {
         activated?(); super.mouseDown(with: event)
         guard event.modifierFlags.contains(.command) else { return }
@@ -108,11 +117,13 @@ struct PDFCanvas: NSViewRepresentable {
         view.clickedText = { model.jumpFromPDF($0) }
         view.activated = { [weak view] in model.preview = view }
         if primary || model.preview == nil { model.preview = view }; controls.view = view
+        view.navigationTitle = model.tr("Show in Source")
         view.configureRendering(mode: model.pdfAppearance, darkAlternative: model.darkPDFAppearance, lightAlternative: model.lightPDFAppearance)
         context.coordinator.observe(view)
         return view
     }
     func updateNSView(_ view: StudioPDFView, context: Context) {
+        view.navigationTitle = model.tr("Show in Source")
         view.configureRendering(mode: model.pdfAppearance, darkAlternative: model.darkPDFAppearance, lightAlternative: model.lightPDFAppearance)
         let key = model.previewDocumentKey
         guard view.document !== model.pdf || view.documentKey != key else { return }
@@ -159,11 +170,20 @@ struct PreviewPane: View {
                 Text("Page \(controls.page) of \(model.pdf?.pageCount ?? 0)").foregroundStyle(.secondary).monospacedDigit()
                 Spacer(minLength: 4)
                 Button { model.popOut() } label: { Image(systemName: "macwindow") }.help("Open preview window")
+                Button { model.jumpToPDF() } label: { Image(systemName: "arrow.right.to.line") }.help(model.tr("Show in PDF"))
+                Button { controls.view?.showSelectedSource() } label: { Image(systemName: "arrow.left.to.line") }.help(model.tr("Show in Source"))
                 Button { model.followCursor.toggle() } label: { Image(systemName: "scope").foregroundStyle(model.followCursor ? .blue : .secondary) }.help("Follow source text")
                 Divider().frame(height: 13)
                 Button { model.exportPDF() } label: { Image(systemName: "arrow.down") }.help("Export PDF").disabled(model.successfulRevision != model.revision)
             }.font(.system(size: 11)).buttonStyle(.borderless).padding(.horizontal, 10).frame(height: 29).background(Color(nsColor: .textBackgroundColor))
             Divider()
+            if !model.navigationStatus.isEmpty {
+                HStack {
+                    Text(model.tr(model.navigationStatus)).font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button { model.navigationStatus = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
+                }.padding(.horizontal, 10).padding(.vertical, 4)
+            }
             if model.pdf != nil { PDFCanvas(model: model, controls: controls, primary: primary) }
             else { ContentUnavailableView(model.compiling ? "Typesetting…" : "No preview yet", systemImage: "doc.richtext", description: Text("Your document appears here after a successful compile.")).frame(maxWidth: .infinity, maxHeight: .infinity) }
         }.preferredColorScheme(model.theme == "Dark" ? .dark : model.theme == "Light" ? .light : nil)

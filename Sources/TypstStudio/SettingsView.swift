@@ -3,7 +3,7 @@ import AppKit
 
 struct SettingsView: View {
     @ObservedObject var model: StudioModel
-    @EnvironmentObject private var updates: UpdateChecker
+    @EnvironmentObject private var updates: AutomaticUpdater
     @State private var category = "General"
     @State private var font = "New Computer Modern"
     // Enumerate fonts once per settings presentation, not on every slider change.
@@ -84,7 +84,7 @@ struct SettingsView: View {
             }
             Section(model.tr("Navigation")) {
                 Toggle(model.tr("Preview follows cursor (text matching)"), isOn: $model.followCursor)
-                Text(model.tr("⌘-click a PDF text line to find its source. Matching is text based; formulas and repeated text may not map precisely.")).font(.caption).foregroundStyle(.secondary)
+                Text(model.tr("Select text and use Show in PDF (⇧⌘J) or Show in Source (⌥⌘J). You can also ⌘-click a text line. Text matching cannot precisely locate formulas or generated content.")).font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -94,9 +94,11 @@ struct SettingsView: View {
             Toggle(model.tr("Check for updates on startup"), isOn: $updates.checkOnStartup)
             Button(model.tr(updates.isChecking ? "Checking…" : "Check for Updates…")) { Task { await updates.check(presentResult: false) } }.disabled(updates.isChecking)
             Text(updates.displayStatus(language: model.language)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-            if let available = updates.available, available.isCompatible {
-                Button(model.tr("Download") + " " + available.version) { updates.openDownload() }
-            }
+            if !updates.details.isEmpty { Text(updates.details).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
+            if updates.isChecking { ProgressView(value: updates.progress) }
+            if updates.readyToRestart { Button(model.tr("Restart to Update")) { updates.restart() } }
+            if updates.canCancel { Button(model.tr("Cancel download")) { updates.cancelDownload() } }
+            Text(model.tr("Updates download in the background. You can keep editing until you choose to restart.")).font(.caption).foregroundStyle(.secondary)
         }
     }
 }

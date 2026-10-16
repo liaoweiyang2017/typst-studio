@@ -49,3 +49,14 @@ The original freeze was reproduced in the actual 0.1.1 app. `sample` captured re
 - https://developer.apple.com/documentation/swiftui/form — native grouped controls.
 
 App-owned settings, welcome and primary command labels switch immediately; OS dialogs and raw compiler diagnostics retain their own language. Localization does not reset the editor or PDF cache.
+
+## 0.1.7 — Updates and text navigation
+
+- https://github.com/sparkle-project/Sparkle/tree/2.10.0 — pinned binary SwiftPM dependency. A small SPUUserDriver exposes background progress and a restart-ready banner. Sparkle verifies Ed25519-signed archives and installs out of process; no custom shell self-overwriter.
+- https://sparkle-project.org/documentation/ — publishing and signature configuration. Private signing key remains in the local login Keychain under account `typst-studio-updates`.
+- https://github.com/texstudio-org/texstudio/tree/master/src/pdfviewer — reference for explicit forward/inverse navigation and background PDF rendering. No source code copied.
+- See Qt-migration-assessment.md for pinned source links and migration estimates.
+
+Current navigation is normalized text matching, not a Typst compiler source map. Whitespace, case and common ligatures are normalized while retaining original UTF-16 offsets. Search runs on a serial worker with cancellation and generation guards; ambiguous results do not jump. PDF page text is indexed lazily and cached per compilation session. Project source reads are limited to text-sized .typ files (4 MiB each).
+
+Validation for 0.1.7: an isolated, signed QA build was updated through a throttled localhost feed to a newer QA bundle. The editor remained usable during download, the ready banner appeared, canceling the save prompt kept the current process, and an approved restart replaced the bundle and launched the new version. Production app/preferences were not used for this installation test. A 180-page synthetic document took 72.4 ms on first text navigation and 11.5 ms with a warm index on the development machine; these are sample measurements, not universal guarantees.

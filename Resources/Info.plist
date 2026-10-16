@@ -30,12 +30,20 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.6</string>
+	<string>0.1.7</string>
 	<key>CFBundleVersion</key>
-	<string>7</string>
+	<string>8</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/liaoweiyang2017/typst-studio-releases/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>5GT6r4MeI9a9lD55kJvNFIDvDQhG5rboEM4XJA/BUfo=</string>
+	<key>SUVerifyUpdateBeforeExtraction</key>
 	<true/>
 	<key>UTImportedTypeDeclarations</key>
 	<array>

@@ -2,6 +2,21 @@ import SwiftUI
 import AppKit
 
 final class CodeTextView: NSTextView {
+    var navigateToPDF: (() -> Void)?
+    var navigationTitle = "Show in PDF"
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+        if event.modifierFlags.contains(.command) { navigateToPDF?() }
+    }
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+        menu.addItem(.separator())
+        let item = NSMenuItem(title: navigationTitle, action: #selector(showInPDF), keyEquivalent: "")
+        item.target = self; menu.addItem(item)
+        return menu
+    }
+    @objc private func showInPDF() { navigateToPDF?() }
+
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
         guard let layoutManager, let textContainer, selectedRange().length == 0 else { return }
@@ -60,6 +75,7 @@ struct SourceEditor: NSViewRepresentable {
         text.textContainerInset = NSSize(width: 6, height: 5); text.usesFindBar = true
         text.string = model.text; text.setSelectedRange(NSRange(location: 0, length: 0)); text.delegate = context.coordinator; text.font = .monospacedSystemFont(ofSize: model.fontSize, weight: .regular)
         scroll.documentView = text; scroll.verticalRulerView = LineRuler(scroll, text: text); scroll.hasVerticalRuler = true; scroll.rulersVisible = true
+        text.navigateToPDF = { [weak model] in model?.jumpToPDF() }
         model.editor = text; context.coordinator.highlight(text)
         return scroll
     }
@@ -67,6 +83,7 @@ struct SourceEditor: NSViewRepresentable {
         context.coordinator.updating = true
         defer { context.coordinator.updating = false }
         guard let text = scroll.documentView as? NSTextView else { return }
+        (text as? CodeTextView)?.navigationTitle = model.tr("Show in PDF")
         var refresh = false
         if text.string != model.text {
             text.string = model.text; refresh = true
@@ -75,7 +92,11 @@ struct SourceEditor: NSViewRepresentable {
         if context.coordinator.lastDiagnostic != model.diagnostics { refresh = true; context.coordinator.lastDiagnostic = model.diagnostics }
         text.isContinuousSpellCheckingEnabled = model.spellCheck
         if refresh { context.coordinator.highlight(text) }
-        if let target = model.jumpLine {
+        if let target = model.jumpRange, NSMaxRange(target) <= (text.string as NSString).length {
+            text.setSelectedRange(target); text.scrollRangeToVisible(target); text.showFindIndicator(for: target)
+            text.window?.makeFirstResponder(text)
+            DispatchQueue.main.async { if model.jumpRange == target { model.jumpRange = nil } }
+        } else if let target = model.jumpLine {
             let ns = text.string as NSString; var pos = 0
             for _ in 1..<max(1, target) { if pos >= ns.length { break }; pos = NSMaxRange(ns.lineRange(for: NSRange(location: pos, length: 0))) }
             let range = NSRange(location: min(pos, ns.length), length: 0)

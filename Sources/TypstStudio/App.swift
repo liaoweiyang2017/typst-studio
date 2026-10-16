@@ -5,19 +5,18 @@ import PDFKit
 @main struct TypstStudioApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var model = StudioModel()
-    @StateObject private var updates = UpdateChecker()
+    @StateObject private var updates = AutomaticUpdater()
     var body: some Scene {
         Window("Typst Studio", id: "studio") {
             Group {
                 if model.showWelcome { WelcomeView(model: model) }
                 else { StudioView(model: model) }
             }
-                .onAppear { delegate.model = model; NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true); Task { await updates.checkAtLaunch() } }
+                .onAppear { delegate.model = model; updates.prepareToRestart = { [weak model] in model?.prepareForUpdateRestart() ?? false }; NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true); Task { await updates.checkAtLaunch() } }
                 .sheet(isPresented: $model.showSettings) { SettingsView(model: model).environmentObject(updates) }
-                .alert(model.tr("Software Update"), isPresented: $updates.showResult) {
-                    if updates.available?.isCompatible == true { Button(model.tr("Download Update")) { updates.openDownload() } }
-                    Button(model.tr("OK"), role: .cancel) {}
-                } message: { Text(updates.displayStatus(language: model.language)) }
+                .safeAreaInset(edge: .bottom) {
+                    if updates.showBanner { UpdateBanner(model: model, updates: updates) }
+                }
                 .preferredColorScheme(model.theme == "Dark" ? .dark : model.theme == "Light" ? .light : nil)
                 .background(WindowGuard(model: model))
                 .onOpenURL { if ProjectFiles.isDirectory($0) { model.openProject($0) } else { model.openFile($0) } }
@@ -40,6 +39,8 @@ import PDFKit
             }
             CommandGroup(replacing: .appSettings) { Button(model.tr("Settings…")) { model.showSettings = true }.keyboardShortcut(",") }
             CommandMenu(model.tr("Typeset")) {
+                Button(model.tr("Show in PDF")) { model.jumpToPDF() }.keyboardShortcut("j", modifiers: [.command, .shift])
+                Button(model.tr("Show in Source")) { if let phrase = model.preview?.currentSelection?.string { model.jumpFromPDF(phrase) } }.keyboardShortcut("j", modifiers: [.command, .option])
                 Button(model.tr("Compile")) { model.compile() }.keyboardShortcut("b")
                 Button(model.tr("Symbols")) { model.showSymbols = true }.keyboardShortcut("m", modifiers: [.command, .shift])
                 Button(model.tr("Pop Out Preview")) { model.popOut() }
@@ -57,7 +58,7 @@ import PDFKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     weak var model: StudioModel?
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard model?.confirmDiscard() ?? true else { return .terminateCancel }
+        guard model?.confirmTermination() ?? true else { return .terminateCancel }
         model?.shutdownCompiler()
         return .terminateNow
     }

@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
 SDK_VERSION=$(xcrun --sdk macosx --show-sdk-version)
-swift build -c release --arch arm64 --sdk "$SDK_PATH" -Xlinker -platform_version -Xlinker macos -Xlinker 14.0 -Xlinker "$SDK_VERSION"
+swift build -c release --arch arm64 --sdk "$SDK_PATH" -Xlinker -platform_version -Xlinker macos -Xlinker 14.0 -Xlinker "$SDK_VERSION" -Xlinker -rpath -Xlinker @executable_path/../Frameworks
 BIN_DIR=$(swift build -c release --arch arm64 --show-bin-path)
 APP=${APP_DESTINATION:-"$HOME/Applications/Typst Studio.app"}
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers" .build/AppIcon.iconset
@@ -21,6 +21,9 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add DTPlatformVersion string $SDK_VERSION" "$APP/Contents/Info.plist"
 cp Resources/THIRD_PARTY_NOTICES.txt "$APP/Contents/Resources/"
 cp Resources/Typst-LICENSE "$APP/Contents/Resources/"
+cp .build/artifacts/sparkle/Sparkle/LICENSE "$APP/Contents/Resources/Sparkle-LICENSE"
+mkdir -p "$APP/Contents/Frameworks"
+ditto .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framework"
 xattr -cr "$APP"
 codesign --force --sign - "$APP/Contents/Helpers/typst"
 codesign --force --sign - "$APP"

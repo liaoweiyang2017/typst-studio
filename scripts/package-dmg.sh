@@ -33,6 +33,7 @@ with open(sys.argv[1], 'rb') as stream:
     info = plistlib.load(stream)
 Path('dist/release-info.json').write_text(json.dumps({
     'version': info['CFBundleShortVersionString'],
+    'build': info['CFBundleVersion'],
     'minimum_macos': info['LSMinimumSystemVersion'],
     'architecture': sys.argv[2],
 }, indent=2) + '\n')

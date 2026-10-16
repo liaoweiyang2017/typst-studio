@@ -9,6 +9,9 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     var source = ""
     var revision = -1
     var pdf: PDFDocument?
+    var pdfData: Data?
+    var pdfGeneration = UUID()
+    let navigationIndex = PDFNavigationIndex()
     var diagnostics = ""
     var success = false
     var elapsed = 0.0
@@ -33,6 +36,11 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     @Published var line = 1
     @Published var column = 1
     @Published var jumpLine: Int?
+    @Published var jumpRange: NSRange?
+    @Published var navigationStatus = ""
+    private let navigationQueue = DispatchQueue(label: "studio.navigation", qos: .userInitiated)
+    private var navigationCancellation: CompileCancellation?
+    private var navigationDebounce: DispatchWorkItem?
     @Published var sidebar = true
     @Published var showSymbols = false
     @Published var showDiagnostics = false
@@ -118,7 +126,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         guard let re = try? NSRegularExpression(pattern: #"(?:<stdin>|-):(\d+):(\d+):"#), let m = re.firstMatch(in: diagnostics, range: NSRange(diagnostics.startIndex..., in: diagnostics)), let r = Range(m.range(at: 1), in: diagnostics) else { return nil }
         return Int(diagnostics[r])
     }
-    func changed(_ value: String) { text = value; dirty = text != lastSavedText; revision += 1; scheduleCompile() }
+    func changed(_ value: String) { navigationCancellation?.cancel(); text = value; dirty = text != lastSavedText; revision += 1; scheduleCompile() }
     func persistRecovery() {
         let value = Recovery(text: text, path: fileURL?.path, project: projectURL?.path, dirty: dirty), url = recoveryURL
         recoveryQueue.async { if let data = try? JSONEncoder().encode(value) { try? data.write(to: url, options: .atomic) } }
@@ -151,7 +159,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         return created
     }
     func shutdownCompiler() {
-        debounce?.cancel()
+        debounce?.cancel(); navigationDebounce?.cancel(); navigationCancellation?.cancel()
         for session in sessions.values { session.compiler.shutdown() }
         sessions.removeAll(); sessionOrder.removeAll()
     }
@@ -166,7 +174,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
             let document = result.fromCache ? nil : result.pdf.flatMap { PDFDocument(data: $0) }
             DispatchQueue.main.async {
                 guard let self, let session, self.sessions[key] === session, session.revision == version else { return }
-                if let document { session.pdf = document }
+                if let document { session.pdf = document; session.pdfData = result.pdf; session.pdfGeneration = UUID() }
                 session.diagnostics = result.diagnostics; session.success = result.success; session.elapsed = result.elapsed
                 guard self.documentKey == key, self.revision == version, !self.showWelcome else { return }
                 self.compiling = false; self.elapsed = session.elapsed; self.diagnostics = session.diagnostics
@@ -177,6 +185,13 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
             }
         })
     }
+    private var updateRestartApproved = false
+    func prepareForUpdateRestart() -> Bool {
+        guard confirmDiscard() else { return false }
+        updateRestartApproved = true
+        return true
+    }
+    func confirmTermination() -> Bool { updateRestartApproved || confirmDiscard() }
     func confirmDiscard() -> Bool {
         guard dirty else { return true }
         let a = NSAlert(); a.messageText = "Save changes to \(title)?"; a.informativeText = "Your document has unsaved changes."
@@ -217,7 +232,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         let url = url.standardizedFileURL.resolvingSymlinksInPath()
         if url.pathExtension != "typ" { assetURL = url; return }
         guard fileURL != url, confirmDiscard() else { return }
-        capturePreview()
+        capturePreview(); navigationCancellation?.cancel(); navigationDebounce?.cancel(); jumpRange = nil; navigationStatus = ""
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
             showWelcome = false; fileURL = url; text = content; jumpLine = 1; lastSavedText = content; dirty = false
@@ -289,16 +304,60 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         let newColumn = (prefix.components(separatedBy: "\n").last?.count ?? 0) + 1
         if line != newLine { line = newLine }
         if column != newColumn { column = newColumn }
-        if followCursor, let pdf {
-            let lines = text.components(separatedBy: "\n")
-            let query = lines[min(line - 1, lines.count - 1)].trimmingCharacters(in: CharacterSet(charactersIn: "= *#_ "))
-            if query.count > 4, let selection = pdf.findString(query, withOptions: .caseInsensitive).first { preview?.go(to: selection) }
+        if followCursor {
+            navigationDebounce?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.jumpToPDF(quiet: true) }
+            navigationDebounce = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: work)
+        }
+    }
+    func jumpToPDF(quiet: Bool = false) {
+        guard let session = sessions[documentKey], let data = session.pdfData, let document = pdf else {
+            if !quiet { navigationStatus = "Compile the document before navigating." }; return
+        }
+        let identity = ObjectIdentifier(document), index = session.navigationIndex, generation = session.pdfGeneration
+        let source = text as NSString
+        let selected = editor?.selectedRange() ?? NSRange(location: 0, length: 0)
+        let safe = NSRange(location: min(selected.location, source.length), length: min(selected.length, max(0, source.length - selected.location)))
+        let range = safe.length > 0 ? safe : source.lineRange(for: safe)
+        let phrase = source.substring(with: range)
+        guard phrase.utf16.count <= 4096, NavigationText(phrase).normalized.count >= 3 else { if !quiet { navigationStatus = "Select at least three text characters." }; return }
+        let cancellation = CompileCancellation(); navigationCancellation?.cancel(); navigationCancellation = cancellation
+        let key = documentKey, version = revision
+        if !quiet { navigationStatus = "Finding PDF location…" }
+        navigationQueue.async { [weak self] in
+            let matches = index.matches(data: data, generation: generation, phrase: phrase, cancelled: { cancellation.isCancelled })
+            DispatchQueue.main.async {
+                guard let self, !cancellation.isCancelled, self.documentKey == key, self.revision == version, let document = self.pdf, ObjectIdentifier(document) == identity else { return }
+                guard matches.count == 1, let match = matches.first, let selection = document.page(at: match.page)?.selection(for: match.range) else {
+                    if !quiet { self.navigationStatus = matches.isEmpty ? "No text match. Try selecting a distinctive phrase." : "Multiple matches. Select a longer phrase." }; return
+                }
+                self.preview?.setCurrentSelection(selection, animate: true); self.preview?.go(to: selection)
+                self.navigationStatus = "PDF location found"
+            }
         }
     }
     func jumpFromPDF(_ phrase: String) {
-        let needle = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard needle.count > 2, let r = text.range(of: needle, options: .caseInsensitive) else { return }
-        goToLine(text[..<r.lowerBound].components(separatedBy: "\n").count)
+        guard phrase.utf16.count <= 4096, NavigationText(phrase).normalized.count >= 3 else { navigationStatus = "Select at least three text characters."; return }
+        let cancellation = CompileCancellation(); navigationCancellation?.cancel(); navigationCancellation = cancellation
+        let key = documentKey, version = revision, source = text, current = fileURL, projectFiles = files
+        navigationStatus = "Finding source location…"
+        navigationQueue.async { [weak self] in
+            let matches = TextNavigation.sourceMatches(phrase: phrase, current: source, currentURL: current, files: projectFiles, cancelled: { cancellation.isCancelled })
+            DispatchQueue.main.async {
+                guard let self, !cancellation.isCancelled, self.documentKey == key, self.revision == version else { return }
+                guard matches.count == 1, let match = matches.first else {
+                    self.navigationStatus = matches.isEmpty ? "No text match. Try selecting a distinctive phrase." : "Multiple matches. Select a longer phrase."; return
+                }
+                if let target = match.url, target != self.fileURL {
+                    self.openFile(target)
+                    guard self.fileURL == target else { return } // Save/Discard may have been cancelled.
+                }
+                guard self.text == match.source else { self.navigationStatus = "Source changed. Try navigating again."; return }
+                self.jumpLine = nil; self.jumpRange = match.range
+                self.navigationStatus = "Source location found"
+            }
+        }
     }
     static let sample = """
     #set page(paper: "a4", margin: (x: 24mm, y: 24mm))

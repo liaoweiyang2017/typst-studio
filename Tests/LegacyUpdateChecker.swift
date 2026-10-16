@@ -1,3 +1,4 @@
+// Kept only as a compatibility fixture for the public feed consumed by 0.1.5–0.1.6.
 import Foundation
 import Combine
 import AppKit
