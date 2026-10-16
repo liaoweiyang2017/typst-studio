@@ -1,0 +1,10 @@
+Typst Studio 0.1.0 — independent native macOS editor.
+Typst compiler 0.15.1: https://github.com/typst/typst (Apache-2.0).
+Copyright (c) Typst GmbH and contributors. Full license: Typst-LICENSE.
+Bundled compiler is copied from the local Homebrew installation without modification.
+Typst includes open-source font and library dependencies; upstream notices:
+https://github.com/typst/typst/tree/v0.15.1
+Typst and TeXstudio names belong to their respective projects. This application is not an official product of either project.
+Icon generated specifically for this project, inspired by the user's visual reference.
+Edist was inspected as a behavioral reference. No Edist binaries, resources, models or source code are included.
+REA 6.5.0 (MIT) is a development analysis tool, not included in the app.
