@@ -21,3 +21,17 @@ PYTEST
 
 swiftc Sources/TypstStudio/Compiler.swift Sources/TypstStudio/WatchCompiler.swift Sources/TypstStudio/ProjectFiles.swift Sources/TypstStudio/StudioModel.swift Sources/TypstStudio/Preview.swift Sources/TypstStudio/SidebarTools.swift Tests/DocumentSwitch.swift -o .build/document-switch
 .build/document-switch
+
+swiftc Sources/TypstStudio/SidebarModePicker.swift Tests/SidebarInteraction.swift -o .build/sidebar-interaction
+swiftc Sources/TypstStudio/Compiler.swift Sources/TypstStudio/WatchCompiler.swift Sources/TypstStudio/ProjectFiles.swift Sources/TypstStudio/StudioModel.swift Sources/TypstStudio/Preview.swift Tests/PreviewPositionRegression.swift -o .build/preview-position
+python3 - <<'PYINTERACTION'
+import subprocess
+for test in ['.build/sidebar-interaction', '.build/preview-position']:
+    result = subprocess.run([test], timeout=18, capture_output=True, text=True)
+    print(result.stdout)
+    if result.returncode:
+        print(result.stderr[-2500:])
+        raise SystemExit(result.returncode)
+PYINTERACTION
+swiftc Sources/TypstStudio/Compiler.swift Sources/TypstStudio/WatchCompiler.swift Sources/TypstStudio/ProjectFiles.swift Sources/TypstStudio/StudioModel.swift Sources/TypstStudio/Preview.swift Tests/PDFColorTests.swift -o .build/pdf-color-tests
+.build/pdf-color-tests

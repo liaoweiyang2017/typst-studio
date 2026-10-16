@@ -1,7 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-swift build -c release --arch arm64
+SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
+SDK_VERSION=$(xcrun --sdk macosx --show-sdk-version)
+swift build -c release --arch arm64 --sdk "$SDK_PATH" -Xlinker -platform_version -Xlinker macos -Xlinker 14.0 -Xlinker "$SDK_VERSION"
 BIN_DIR=$(swift build -c release --arch arm64 --show-bin-path)
 APP=${APP_DESTINATION:-"$HOME/Applications/Typst Studio.app"}
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers" .build/AppIcon.iconset
@@ -15,6 +17,8 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns .build/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add DTSDKName string macosx$SDK_VERSION" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add DTPlatformVersion string $SDK_VERSION" "$APP/Contents/Info.plist"
 cp Resources/THIRD_PARTY_NOTICES.txt "$APP/Contents/Resources/"
 cp Resources/Typst-LICENSE "$APP/Contents/Resources/"
 xattr -cr "$APP"

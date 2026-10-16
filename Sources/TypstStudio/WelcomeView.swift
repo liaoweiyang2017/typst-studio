@@ -4,6 +4,7 @@ import AppKit
 struct WelcomeView: View {
     @ObservedObject var model: StudioModel
     @State private var templates = false
+    @State private var openingRecent: String?
     var body: some View {
         GeometryReader { geometry in
         HStack(spacing: 0) {
@@ -13,7 +14,7 @@ struct WelcomeView: View {
                     Image(nsImage: icon).resizable().scaledToFit().frame(width: 132, height: 132)
                 }
                 Text("Typst Studio").font(.system(size: 42, weight: .bold)).padding(.top, 18)
-                Text("Version 0.1.3").font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
+                Text("Version 0.1.4").font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
                 Spacer().frame(height: 38)
                 VStack(spacing: 13) {
                     welcomeButton("Open Folder…", icon: "folder") { model.openPanel(folder: true) }
@@ -33,11 +34,18 @@ struct WelcomeView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(model.recentProjects, id: \.self) { path in
                                 Button {
-                                    if FileManager.default.fileExists(atPath: path) { model.openProject(URL(fileURLWithPath: path)) }
-                                    else { model.report("This project is no longer at its saved location. Use Open Folder to locate it.") }
+                                    openingRecent = path
+                                    Task { @MainActor in
+                                        // A short feedback frame makes the selected row visible before navigation.
+                                        try? await Task.sleep(nanoseconds: 70_000_000)
+                                        let exists = await Task.detached { FileManager.default.fileExists(atPath: path) }.value
+                                        if exists { model.openProject(URL(fileURLWithPath: path)) }
+                                        else { model.report("This project is no longer at its saved location. Use Open Folder to locate it.") }
+                                        openingRecent = nil
+                                    }
                                 } label: {
-                                    HStack(spacing: 12) { Image(systemName: "folder").foregroundStyle(.blue); VStack(alignment: .leading, spacing: 4) { Text(URL(fileURLWithPath: path).lastPathComponent).font(.system(size: 14, weight: .medium)); Text(path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).font(.caption).foregroundStyle(.secondary).lineLimit(2) }; Spacer() }.padding(.vertical, 8)
-                                }.buttonStyle(.plain)
+                                    HStack(spacing: 12) { Image(systemName: "folder").foregroundStyle(.blue); VStack(alignment: .leading, spacing: 4) { Text(URL(fileURLWithPath: path).lastPathComponent).font(.system(size: 14, weight: .medium)); Text(path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).font(.caption).foregroundStyle(.secondary).lineLimit(2) }; Spacer(); if openingRecent == path { ProgressView().controlSize(.small) } }.padding(.horizontal, 10).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                                }.buttonStyle(RecentProjectStyle(selected: openingRecent == path)).disabled(openingRecent != nil)
                             }
                         }
                     }
@@ -59,5 +67,12 @@ struct WelcomeView: View {
     }
     func welcomeButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { HStack(spacing: 18) { Image(systemName: icon).font(.system(size: 23)).foregroundStyle(.blue).frame(width: 28); Text(title).font(.system(size: 18)); Spacer() }.padding(.horizontal, 23).frame(height: 57).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 13)) }.buttonStyle(.plain)
+    }
+}
+
+struct RecentProjectStyle: ButtonStyle {
+    let selected: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.background(Color.primary.opacity(selected || configuration.isPressed ? 0.10 : 0), in: RoundedRectangle(cornerRadius: 8))
     }
 }

@@ -59,7 +59,6 @@ struct StudioView: View {
     @State private var section = 0
     @State private var search = ""
     @State private var previewVisible = true
-    private let modes = [("folder", "Files"), ("magnifyingglass", "Search"), ("list.bullet.indent", "Outline"), ("x.squareroot", "Symbols"), ("exclamationmark.triangle", "Issues")]
     var body: some View {
         HSplitView {
             if model.sidebar { sidebar.frame(minWidth: 190, idealWidth: 230, maxWidth: 260) }
@@ -122,15 +121,7 @@ struct StudioView: View {
     }
     var sidebar: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 0) {
-                ForEach(0..<modes.count, id: \.self) { index in
-                    Button { section = index } label: {
-                        Image(systemName: modes[index].0).font(.system(size: 12)).frame(width: 29, height: 29)
-                            .foregroundStyle(section == index ? Color.white : Color.primary)
-                            .background(section == index ? Color.blue : Color.clear, in: Capsule())
-                    }.buttonStyle(.plain).help(modes[index].1).accessibilityLabel(modes[index].1)
-                }
-            }.padding(3).background(Color.primary.opacity(0.055), in: Capsule()).padding(.top, 6)
+            SidebarModePicker(selection: $section).frame(width: 166, height: 38).padding(.top, 6)
             if section == 0 {
                 ScrollView {
                     VStack(spacing: 1) {
@@ -227,10 +218,11 @@ struct ProjectBranch: View {
 struct PDFOutlineRows: View {
     let node: PDFOutline
     let model: StudioModel
+    var depth = 0
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: 1) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(0..<node.numberOfChildren, id: \.self) { i in
-                if let child = node.child(at: i) { PDFOutlineRow(node: child, model: model) }
+                if let child = node.child(at: i) { PDFOutlineRow(node: child, model: model, depth: depth) }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -238,16 +230,33 @@ struct PDFOutlineRows: View {
 struct PDFOutlineRow: View {
     let node: PDFOutline
     let model: StudioModel
+    let depth: Int
     @State private var expanded = true
-    var title: some View {
-        Button(node.label ?? "Heading") { if let dest = node.destination { model.preview?.go(to: dest) } }
-            .buttonStyle(.plain).font(.system(size: 12, weight: node.numberOfChildren > 0 ? .medium : .regular))
-            .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-    }
     var body: some View {
-        if node.numberOfChildren > 0 {
-            DisclosureGroup(isExpanded: $expanded) { PDFOutlineRows(node: node, model: model) } label: { title }.padding(.vertical, 3)
-        } else { title.foregroundStyle(.secondary).padding(.vertical, 4) }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 3) {
+                if node.numberOfChildren > 0 {
+                    Button { expanded.toggle() } label: {
+                        Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.system(size: 10, weight: .semibold))
+                            .frame(width: 17, height: 27).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityLabel("Toggle " + (node.label ?? "heading"))
+                        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+                } else { Color.clear.frame(width: 17, height: 27) }
+                Button(node.label ?? "Heading") { if let dest = node.destination { model.preview?.go(to: dest) } }
+                    .buttonStyle(.plain).font(.system(size: depth == 0 ? 13 : 12, weight: depth == 0 ? .bold : .regular))
+                    .lineLimit(1).help(node.label ?? "").frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }.foregroundStyle(depth == 0 ? Color.primary : .secondary)
+                .padding(.leading, CGFloat(depth * 17)).frame(height: depth == 0 ? 31 : 27)
+                .overlay(alignment: .leading) {
+                    if depth > 0 {
+                        HStack(spacing: 16) {
+                            ForEach(0..<depth, id: \.self) { _ in Rectangle().fill(Color.primary.opacity(0.10)).frame(width: 1) }
+                        }.padding(.leading, 8).allowsHitTesting(false)
+                    }
+                }
+            if expanded && node.numberOfChildren > 0 { PDFOutlineRows(node: node, model: model, depth: depth + 1) }
+        }
     }
 }
 struct SymbolsView: View {
@@ -264,6 +273,17 @@ struct SettingsView: View {
             HStack { Text("Editor settings").font(.title2.bold()); Spacer(); Button("Done") { model.showSettings = false } }
             Form {
                 Picker("Appearance", selection: $model.theme) { ForEach(["System", "Light", "Dark"], id: \.self) { Text($0) } }
+                Picker("PDF appearance", selection: $model.pdfAppearance) {
+                    Text("Automatic · follow appearance").tag("Automatic")
+                    Text("Original colors").tag("Original")
+                    Text("Night").tag("Night")
+                    Text("Green reading mode").tag("Green")
+                }
+                Picker("PDF in dark appearance", selection: $model.darkPDFAppearance) {
+                    Text("Night").tag("Night")
+                    Text("Green reading mode").tag("Green")
+                }.disabled(model.pdfAppearance != "Automatic")
+                Text("Preview colors only. Exported PDFs keep their original colors.").font(.caption).foregroundStyle(.secondary)
                 HStack { Text("Editor font size"); Slider(value: $model.fontSize, in: 11...24, step: 1); Text("\(Int(model.fontSize)) pt") }
                 Toggle("System spell checking", isOn: $model.spellCheck)
                 Toggle("Typing sound", isOn: $model.typingSound)
@@ -272,7 +292,7 @@ struct SettingsView: View {
                 Button("Insert font setting") { model.showSettings = false; model.insert("#set text(font: \"\(font)\")\n") }
             }.formStyle(.grouped)
             Text("⌘-click a PDF text line to find its source. Matching is text based; formulas and repeated text may not map precisely.").font(.caption).foregroundStyle(.secondary)
-        }.padding(24).frame(width: 520, height: 440)
+        }.padding(24).frame(width: 560, height: 560)
         .onChange(of: model.fontSize) { _, value in UserDefaults.standard.set(value, forKey: "fontSize") }
         .onChange(of: model.theme) { _, value in UserDefaults.standard.set(value, forKey: "theme") }
     }

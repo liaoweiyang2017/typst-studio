@@ -12,6 +12,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     var diagnostics = ""
     var success = false
     var elapsed = 0.0
+    var previewPosition: PreviewPosition?
 }
 @MainActor final class StudioModel: ObservableObject {
     @Published var text = ""
@@ -42,6 +43,12 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     @Published var status = "Preparing preview…"
     @Published var fontSize = 14.0
     @Published var theme = "System"
+    @Published var pdfAppearance = UserDefaults.standard.string(forKey: "pdfAppearance") ?? "Automatic" {
+        didSet { UserDefaults.standard.set(pdfAppearance, forKey: "pdfAppearance") }
+    }
+    @Published var darkPDFAppearance = UserDefaults.standard.string(forKey: "darkPDFAppearance") ?? "Night" {
+        didSet { UserDefaults.standard.set(darkPDFAppearance, forKey: "darkPDFAppearance") }
+    }
     @Published var spellCheck = true
     @Published var typingSound = false
     @Published var followCursor = false
@@ -116,6 +123,13 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         let work = DispatchWorkItem { [weak self] in self?.persistRecovery(); self?.compile() }
         debounce = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+    var previewDocumentKey: String { documentKey }
+    func rememberPreview(_ position: PreviewPosition, for key: String) { sessions[key]?.previewPosition = position }
+    func previewPosition(for key: String) -> PreviewPosition? { sessions[key]?.previewPosition }
+    private func capturePreview() {
+        guard let view = preview as? StudioPDFView, let key = view.documentKey, let position = view.readingPosition() else { return }
+        rememberPreview(position, for: key)
     }
     private var documentKey: String { (projectURL?.path ?? "") + "|" + (fileURL?.path ?? "untitled") }
     private func session(for key: String) -> DocumentSession {
@@ -198,6 +212,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         let url = url.standardizedFileURL.resolvingSymlinksInPath()
         if url.pathExtension != "typ" { assetURL = url; return }
         guard fileURL != url, confirmDiscard() else { return }
+        capturePreview()
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
             showWelcome = false; fileURL = url; text = content; jumpLine = 1; lastSavedText = content; dirty = false
@@ -260,7 +275,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         if let previewWindow { previewWindow.makeKeyAndOrderFront(nil); return }
         let w = NSWindow(contentRect: NSRect(x: 150, y: 150, width: 650, height: 800), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         w.title = "Typst Studio — Live Preview"; w.isReleasedWhenClosed = false
-        w.contentView = NSHostingView(rootView: PreviewPane(model: self)); previewWindow = w; w.makeKeyAndOrderFront(nil)
+        w.contentView = NSHostingView(rootView: PreviewPane(model: self, primary: false)); previewWindow = w; w.makeKeyAndOrderFront(nil)
     }
     func report(_ s: String) { let a = NSAlert(); a.messageText = s; a.runModal() }
     func selectionChanged(_ range: NSRange) {
