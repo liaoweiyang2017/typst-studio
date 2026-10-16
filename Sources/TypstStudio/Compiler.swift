@@ -10,7 +10,9 @@ final class CompileCancellation: @unchecked Sendable {
 final class Compiler {
     static let executable: URL = {
         let bundled = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/typst")
-        return FileManager.default.isExecutableFile(atPath: bundled.path) ? bundled : URL(fileURLWithPath: "/opt/homebrew/bin/typst")
+        // Installed apps must never silently depend on a system installation.
+        if Bundle.main.bundleURL.pathExtension == "app" { return bundled }
+        return URL(fileURLWithPath: ProcessInfo.processInfo.environment["TYPST_BIN"] ?? "/opt/homebrew/bin/typst")
     }()
     static func compile(_ text: String, directory: URL, root: URL, cancellation: CompileCancellation? = nil) -> CompileResult {
         let start = Date(), temp = FileManager.default.temporaryDirectory.appendingPathComponent("typst-studio-\(UUID().uuidString)")

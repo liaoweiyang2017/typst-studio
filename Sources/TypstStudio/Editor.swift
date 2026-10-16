@@ -64,10 +64,12 @@ struct SourceEditor: NSViewRepresentable {
         return scroll
     }
     func updateNSView(_ scroll: NSScrollView, context: Context) {
+        context.coordinator.updating = true
+        defer { context.coordinator.updating = false }
         guard let text = scroll.documentView as? NSTextView else { return }
         var refresh = false
         if text.string != model.text {
-            context.coordinator.updating = true; text.string = model.text; context.coordinator.updating = false; refresh = true
+            text.string = model.text; refresh = true
         }
         if text.font?.pointSize != CGFloat(model.fontSize) { text.font = .monospacedSystemFont(ofSize: model.fontSize, weight: .regular); refresh = true }
         if context.coordinator.lastDiagnostic != model.diagnostics { refresh = true; context.coordinator.lastDiagnostic = model.diagnostics }
@@ -102,7 +104,7 @@ struct SourceEditor: NSViewRepresentable {
         func highlight(_ text: NSTextView) {
             guard let storage = text.textStorage, !text.hasMarkedText() else { return }
             let full = NSRange(location: 0, length: storage.length), selection = text.selectedRange()
-            updating = true; storage.beginEditing()
+            let wasUpdating = updating; updating = true; storage.beginEditing()
             storage.setAttributes([.font: NSFont.monospacedSystemFont(ofSize: model.fontSize, weight: .regular), .foregroundColor: NSColor.labelColor], range: full)
             let rules: [(String, NSColor)] = [
                 (#"(?m)^=+ .*$"#, .systemTeal),
@@ -126,7 +128,7 @@ struct SourceEditor: NSViewRepresentable {
                     storage.addAttributes([.underlineStyle: NSUnderlineStyle.single.rawValue, .underlineColor: NSColor.systemRed, .toolTip: model.diagnostics], range: r)
                 }
             }
-            storage.endEditing(); text.setSelectedRange(selection); updating = false
+            storage.endEditing(); text.setSelectedRange(selection); updating = wasUpdating
         }
     }
 }

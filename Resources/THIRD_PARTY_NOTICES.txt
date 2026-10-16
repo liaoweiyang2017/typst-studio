@@ -1,4 +1,4 @@
-Typst Studio 0.1.1 — independent native macOS editor.
+Typst Studio 0.1.2 — independent native macOS editor.
 Typst compiler 0.15.1: https://github.com/typst/typst (Apache-2.0).
 Copyright (c) Typst GmbH and contributors. Full license: Typst-LICENSE.
 Bundled compiler is copied from the local Homebrew installation without modification.

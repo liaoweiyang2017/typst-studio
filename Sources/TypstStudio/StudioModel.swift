@@ -39,9 +39,8 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     weak var editor: NSTextView?
     weak var preview: PDFView?
     private var debounce: DispatchWorkItem?
-    private let queue = DispatchQueue(label: "studio.compiler", qos: .userInitiated)
-    private var activeCompile = false
-    private var cancellation: CompileCancellation?
+    private let compiler = WatchCompiler()
+    private let recoveryQueue = DispatchQueue(label: "studio.recovery", qos: .utility)
     private var previewWindow: NSWindow?
     private var lastSavedText = ""
     private let recoveryURL: URL
@@ -95,32 +94,34 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         guard let re = try? NSRegularExpression(pattern: #"(?:<stdin>|-):(\d+):(\d+):"#), let m = re.firstMatch(in: diagnostics, range: NSRange(diagnostics.startIndex..., in: diagnostics)), let r = Range(m.range(at: 1), in: diagnostics) else { return nil }
         return Int(diagnostics[r])
     }
-    func changed(_ value: String) { text = value; dirty = text != lastSavedText; revision += 1; persistRecovery(); scheduleCompile() }
+    func changed(_ value: String) { text = value; dirty = text != lastSavedText; revision += 1; scheduleCompile() }
     func persistRecovery() {
-        if let data = try? JSONEncoder().encode(Recovery(text: text, path: fileURL?.path, project: projectURL?.path)) { try? data.write(to: recoveryURL, options: .atomic) }
+        let value = Recovery(text: text, path: fileURL?.path, project: projectURL?.path), url = recoveryURL
+        recoveryQueue.async { if let data = try? JSONEncoder().encode(value) { try? data.write(to: url, options: .atomic) } }
     }
     func scheduleCompile() {
-        cancellation?.cancel()
-        debounce?.cancel(); let work = DispatchWorkItem { [weak self] in self?.compile() }; debounce = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+        debounce?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.persistRecovery(); self?.compile() }
+        debounce = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
     }
+    func shutdownCompiler() { debounce?.cancel(); compiler.shutdown() }
     func compile() {
-        guard !activeCompile, !showWelcome else { return }; activeCompile = true; compiling = true; status = "Typesetting…"
-        let token = CompileCancellation(); cancellation = token
-        let source = text, version = revision
+        guard !showWelcome else { return }
+        compiling = true; status = "Typesetting…"
         let directory = fileURL?.deletingLastPathComponent() ?? projectURL ?? FileManager.default.temporaryDirectory
-        let root = projectURL ?? directory
-        queue.async { [weak self] in
-            let result = Compiler.compile(source, directory: directory, root: root, cancellation: token)
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }; self.activeCompile = false
-                guard self.revision == version else { self.compiling = false; self.scheduleCompile(); return }
+        compiler.submit(.init(source: text, directory: directory, root: projectURL ?? directory,
+                              document: fileURL?.path ?? "untitled", revision: revision) { [weak self] version, result in
+            // Decode off the UI thread; PDFKit displays the completed document on main.
+            let document = result.pdf.flatMap { PDFDocument(data: $0) }
+            DispatchQueue.main.async {
+                guard let self, self.revision == version, !self.showWelcome else { return }
                 self.compiling = false; self.elapsed = result.elapsed; self.diagnostics = result.diagnostics
-                if result.success, let data = result.pdf, let doc = PDFDocument(data: data) {
-                    self.pdf = doc; self.successfulRevision = version; self.status = "Preview up to date"
+                if result.success, let document {
+                    self.pdf = document; self.successfulRevision = version; self.status = "Preview up to date"
                 } else { self.status = "Compilation failed · last successful preview"; self.showDiagnostics = true }
             }
-        }
+        })
     }
     func confirmDiscard() -> Bool {
         guard dirty else { return true }
@@ -152,7 +153,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     func openProject(_ url: URL) {
         let url = url.standardizedFileURL.resolvingSymlinksInPath()
         guard confirmDiscard() else { return }
-        projectURL = url; fileURL = nil; text = ""; lastSavedText = ""; dirty = false
+        projectURL = url; files = []; fileURL = nil; text = ""; lastSavedText = ""; dirty = false
         pdf = nil; diagnostics = ""; revision += 1; successfulRevision = -1
         showWelcome = false; expandedDirectories = []; rememberProject(url)
         refreshFiles(selectMain: true)
@@ -223,7 +224,10 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     func report(_ s: String) { let a = NSAlert(); a.messageText = s; a.runModal() }
     func selectionChanged(_ range: NSRange) {
         let prefix = (text as NSString).substring(to: min(range.location, (text as NSString).length))
-        line = prefix.components(separatedBy: "\n").count; column = (prefix.components(separatedBy: "\n").last?.count ?? 0) + 1
+        let newLine = prefix.components(separatedBy: "\n").count
+        let newColumn = (prefix.components(separatedBy: "\n").last?.count ?? 0) + 1
+        if line != newLine { line = newLine }
+        if column != newColumn { column = newColumn }
         if followCursor, let pdf {
             let lines = text.components(separatedBy: "\n")
             let query = lines[min(line - 1, lines.count - 1)].trimmingCharacters(in: CharacterSet(charactersIn: "= *#_ "))

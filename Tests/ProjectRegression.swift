@@ -18,6 +18,7 @@ import PDFKit
         try "all:\n\techo test".write(to: root.appendingPathComponent("Makefile"), atomically: true, encoding: .utf8)
         try FileManager.default.createDirectory(at: root.appendingPathComponent("empty"), withIntermediateDirectories: true)
         let model = StudioModel(recoveryLocation: root.appendingPathComponent("recovery.json"))
+        defer { model.shutdownCompiler() }
         precondition(model.showWelcome && model.fileURL == nil)
         model.openProject(root)
         try await waitUntil { model.fileURL == main && !model.compiling && model.pdf != nil }

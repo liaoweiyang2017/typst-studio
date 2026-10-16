@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     weak var model: StudioModel?
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard model?.confirmDiscard() ?? true else { return .terminateCancel }
+        model?.shutdownCompiler()
         return .terminateNow
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -62,6 +63,36 @@ struct StudioView: View {
     var body: some View {
         HSplitView {
             if model.sidebar { sidebar.frame(minWidth: 190, idealWidth: 230, maxWidth: 260) }
+            if previewVisible {
+                EditorPreviewSplit { editorPane } preview: { PreviewPane(model: model) }
+            } else { editorPane }
+
+        }
+        .frame(minWidth: 980, minHeight: 620).tint(.blue)
+        .preferredColorScheme(model.theme == "Dark" ? .dark : model.theme == "Light" ? .light : nil)
+        .toolbar {
+            ToolbarItem(placement: .navigation) { Button { model.sidebar.toggle() } label: { Image(systemName: "sidebar.left") }.help("Toggle sidebar") }
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 7) { Text(model.title).font(.system(size: 13, weight: .semibold)); if model.dirty { Circle().fill(.secondary).frame(width: 5, height: 5) } }
+            }
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button { section = 4; model.sidebar = true; model.showDiagnostics.toggle() } label: { Image(systemName: model.diagnostics.isEmpty ? "exclamationmark.triangle.fill" : "exclamationmark.triangle.fill").foregroundStyle(model.diagnostics.isEmpty ? Color.secondary : .orange) }.help(model.status)
+                Button { previewVisible.toggle() } label: { Image(systemName: "rectangle.on.rectangle").foregroundStyle(previewVisible ? Color.blue : .secondary) }.help("Toggle PDF preview")
+            }
+        }
+        .sheet(isPresented: $model.showSymbols) { SymbolsView(model: model) }
+        .sheet(isPresented: $model.showSettings) { SettingsView(model: model) }
+        .sheet(isPresented: Binding(get: { model.assetURL != nil }, set: { if !$0 { model.assetURL = nil } })) {
+            VStack {
+                HStack { Text(model.assetURL?.lastPathComponent ?? "Preview").font(.headline); Spacer(); Button("Done") { model.assetURL = nil } }
+                if let url = model.assetURL {
+                    if let image = NSImage(contentsOf: url) { Image(nsImage: image).resizable().scaledToFit() }
+                    else { ScrollView { Text((try? String(contentsOf: url, encoding: .utf8)) ?? "This file format cannot be previewed.").textSelection(.enabled) } }
+                }
+            }.padding(20).frame(width: 650, height: 550)
+        }
+    }
+    var editorPane: some View {
             VStack(spacing: 0) {
                 SourceEditor(model: model)
                 if model.showDiagnostics && !model.diagnostics.isEmpty {
@@ -87,32 +118,7 @@ struct StudioView: View {
                     if model.compiling { ProgressView().controlSize(.mini) }
                     Text("\(model.text.split { $0.isWhitespace || $0.isNewline }.count) words").foregroundStyle(.secondary)
                 }.font(.system(size: 11)).buttonStyle(.borderless).padding(.horizontal, 14).frame(height: 27).background(Color(nsColor: .textBackgroundColor))
-            }.frame(minWidth: 350, idealWidth: 590)
-            if previewVisible { PreviewPane(model: model).frame(minWidth: 320, idealWidth: 460) }
-        }
-        .frame(minWidth: 980, minHeight: 620).tint(.blue)
-        .preferredColorScheme(model.theme == "Dark" ? .dark : model.theme == "Light" ? .light : nil)
-        .toolbar {
-            ToolbarItem(placement: .navigation) { Button { model.sidebar.toggle() } label: { Image(systemName: "sidebar.left") }.help("Toggle sidebar") }
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 7) { Text(model.title).font(.system(size: 13, weight: .semibold)); if model.dirty { Circle().fill(.secondary).frame(width: 5, height: 5) } }
             }
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button { section = 4; model.sidebar = true; model.showDiagnostics.toggle() } label: { Image(systemName: model.diagnostics.isEmpty ? "exclamationmark.triangle.fill" : "exclamationmark.triangle.fill").foregroundStyle(model.diagnostics.isEmpty ? Color.secondary : .orange) }.help(model.status)
-                Button { previewVisible.toggle() } label: { Image(systemName: "rectangle.on.rectangle").foregroundStyle(previewVisible ? Color.blue : .secondary) }.help("Toggle PDF preview")
-            }
-        }
-        .sheet(isPresented: $model.showSymbols) { SymbolsView(model: model) }
-        .sheet(isPresented: $model.showSettings) { SettingsView(model: model) }
-        .sheet(isPresented: Binding(get: { model.assetURL != nil }, set: { if !$0 { model.assetURL = nil } })) {
-            VStack {
-                HStack { Text(model.assetURL?.lastPathComponent ?? "Preview").font(.headline); Spacer(); Button("Done") { model.assetURL = nil } }
-                if let url = model.assetURL {
-                    if let image = NSImage(contentsOf: url) { Image(nsImage: image).resizable().scaledToFit() }
-                    else { ScrollView { Text((try? String(contentsOf: url, encoding: .utf8)) ?? "This file format cannot be previewed.").textSelection(.enabled) } }
-                }
-            }.padding(20).frame(width: 650, height: 550)
-        }
     }
     var sidebar: some View {
         VStack(spacing: 12) {
@@ -187,11 +193,13 @@ struct ProjectFileRow: View {
 struct ProjectBranch: View {
     @ObservedObject var model: StudioModel
     let directory: URL; let depth: Int
-    @State private var children: [URL] = []
+    struct Entry: Identifiable { let url: URL; let folder: Bool; var id: String { url.path } }
+    @State private var children: [Entry] = []
     var body: some View {
         VStack(spacing: 1) {
-        ForEach(children, id: \.self) { url in
-            if ProjectFiles.isDirectory(url) {
+        ForEach(children) { entry in
+            let url = entry.url
+            if entry.folder {
                 let expanded = model.expandedDirectories.contains(url.path)
                 Button {
                     if expanded { model.expandedDirectories.remove(url.path) } else { model.expandedDirectories.insert(url.path) }
@@ -207,7 +215,13 @@ struct ProjectBranch: View {
                 ProjectFileRow(name: url.lastPathComponent, active: model.fileURL == url, ext: url.pathExtension, indent: CGFloat(depth * 15 + 15), action: { model.openFile(url) })
             }
         }
-        }.task(id: model.fileTreeRevision) { children = ProjectFiles.children(directory) }
+        }.task(id: directory.path + String(model.fileTreeRevision)) {
+            let directory = directory
+            let entries = await Task.detached(priority: .userInitiated) {
+                ProjectFiles.children(directory).map { Entry(url: $0, folder: ProjectFiles.isDirectory($0)) }
+            }.value
+            if !Task.isCancelled { children = entries }
+        }
     }
 }
 struct PDFOutlineRows: View {
@@ -269,7 +283,7 @@ struct WindowGuard: NSViewRepresentable {
         init(_ model: StudioModel) { self.model = model }
         func windowShouldClose(_ sender: NSWindow) -> Bool {
             let close = model.confirmDiscard()
-            if close { model.dirty = false }
+            if close { model.dirty = false; model.shutdownCompiler() }
             return close
         }
     }
