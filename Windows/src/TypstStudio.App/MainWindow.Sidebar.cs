@@ -20,6 +20,7 @@ public sealed partial class MainWindow
     private readonly List<Grid> _sidebarPages = [];
     private CancellationTokenSource _sidebarWork = new();
     private string _compileError = "";
+    private string? _lastSymbolFilter;
     [Microsoft.UI.Xaml.Data.Bindable]
     public sealed record SidebarRow(string Title, string Detail, object Value);
     [Microsoft.UI.Xaml.Data.Bindable]
@@ -73,6 +74,9 @@ public sealed partial class MainWindow
     private void FilterSymbols()
     {
         var query = _symbolQuery.Text ?? "";
+        _symbolList.IsEnabled = _current != null;
+        if (_lastSymbolFilter == query && _symbolList.ItemsSource != null) return;
+        _lastSymbolFilter = query;
         _symbolList.ItemsSource = MathSymbols.All.Where(s => s.Name.Contains(query, StringComparison.OrdinalIgnoreCase) || s.Glyph.Contains(query, StringComparison.Ordinal)).Select(s => new SymbolRow(s.Glyph, s.Name)).ToArray();
         _symbolList.IsEnabled = _current != null;
     }

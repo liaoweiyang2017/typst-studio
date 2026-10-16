@@ -349,6 +349,11 @@ public sealed partial class MainWindow : Window
         for (var i = 0; i < 300; i++) { if (_pdfRevision == _revision && !Busy.IsActive && (expectedText == null || _current?.Text == expectedText)) return; await Task.Delay(50); }
         throw new TimeoutException("Compilation did not settle: " + Status.Text);
     }
+    private async Task WaitForVisibleItemsAsync(ListViewBase list)
+    {
+        for (var i = 0; i < 80; i++) { Root.UpdateLayout(); if (list.ContainerFromIndex(0) != null) return; await Task.Delay(25); }
+        throw new InvalidOperationException("Sidebar items were not realized by WinUI");
+    }
     private async Task CaptureAsync(string path)
     {
             Root.UpdateLayout(); await Task.Delay(100);
@@ -408,14 +413,14 @@ public sealed partial class MainWindow : Window
             for (var i = 0; i < 80 && (_searchResults.ItemsSource is not SidebarRow[] results || results.Length < 2); i++) await Task.Delay(25);
             if (_searchResults.ItemsSource is not SidebarRow[] hits || hits.Length < 2) throw new InvalidOperationException("Project search is missing cross-file results");
             if (_buffers.Values.Any(b => b.Dirty)) throw new InvalidOperationException("Switching panels must not modify source buffers");
-            await CaptureAsync(Path.Combine(root, "sidebar-search.png"));
+            await WaitForVisibleItemsAsync(_searchResults); await CaptureAsync(Path.Combine(root, "sidebar-search.png"));
             if (_searchResults.ContainerFromIndex(0) == null) throw new InvalidOperationException("Search results must be visible");
             SidebarPicker.SelectedIndex = 2; await RefreshSidebarAsync();
             if (_outlineTree.RootNodes.Count < 2 || !_outlineTree.RootNodes.All(n => n.IsExpanded)) throw new InvalidOperationException("Compiled outline must be expanded");
             await CaptureAsync(Path.Combine(root, "sidebar-outline.png"));
             SidebarPicker.SelectedIndex = 3; _symbolQuery.Text = "integral"; FilterSymbols();
             if (_symbolList.Items.Count < 3) throw new InvalidOperationException("Symbol filtering is missing integral variants");
-            await CaptureAsync(Path.Combine(root, "sidebar-symbols.png"));
+            await WaitForVisibleItemsAsync(_symbolList); await CaptureAsync(Path.Combine(root, "sidebar-symbols.png"));
             if (_symbolList.ContainerFromIndex(0) == null) throw new InvalidOperationException("Symbol cells must be visible");
             SidebarPicker.SelectedIndex = 4; await RefreshSidebarAsync(); await CaptureAsync(Path.Combine(root, "sidebar-problems.png"));
             _autoCompile = false; SelectSource(Editor.Text.Length, 0); Editor.SelectedText = "\n#set text(font: )"; await CompileNowAsync();
