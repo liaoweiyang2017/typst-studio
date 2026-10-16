@@ -9,8 +9,8 @@ trap 'rm -rf "$STAGE"' EXIT
 codesign --verify --deep --strict "$APP"
 ditto --norsrc "$APP" "$STAGE/Typst Studio.app"
 ln -s /Applications "$STAGE/Applications"
-cat > "$STAGE/安装说明.txt" <<'TXT'
-Typst Studio 0.1.0
+cat > "$STAGE/安装说明.txt" <<TXT
+Typst Studio $VERSION
 
 将 Typst Studio.app 拖到 Applications 文件夹。
 需要 macOS 14 或更高版本。本构建适用于 Apple Silicon。

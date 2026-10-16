@@ -58,7 +58,7 @@ struct SourceEditor: NSViewRepresentable {
         text.isVerticallyResizable = true; text.isHorizontallyResizable = false; text.autoresizingMask = [.width]
         text.textContainer?.widthTracksTextView = true; text.textContainer?.containerSize = NSSize(width: 500, height: CGFloat.greatestFiniteMagnitude)
         text.textContainerInset = NSSize(width: 6, height: 5); text.usesFindBar = true
-        text.string = model.text; text.delegate = context.coordinator; text.font = .monospacedSystemFont(ofSize: model.fontSize, weight: .regular)
+        text.string = model.text; text.setSelectedRange(NSRange(location: 0, length: 0)); text.delegate = context.coordinator; text.font = .monospacedSystemFont(ofSize: model.fontSize, weight: .regular)
         scroll.documentView = text; scroll.verticalRulerView = LineRuler(scroll, text: text); scroll.hasVerticalRuler = true; scroll.rulersVisible = true
         model.editor = text; context.coordinator.highlight(text)
         return scroll

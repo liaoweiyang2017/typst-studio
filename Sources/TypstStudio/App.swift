@@ -7,13 +7,17 @@ import PDFKit
     @StateObject private var model = StudioModel()
     var body: some Scene {
         Window("Typst Studio", id: "studio") {
-            StudioView(model: model)
+            Group {
+                if model.showWelcome { WelcomeView(model: model) }
+                else { StudioView(model: model) }
+            }
                 .onAppear { delegate.model = model; NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true) }
                 .background(WindowGuard(model: model))
-                .onOpenURL { model.openFile($0) }
+                .onOpenURL { if ProjectFiles.isDirectory($0) { model.openProject($0) } else { model.openFile($0) } }
         }.defaultSize(width: 1360, height: 900)
         .commands {
             CommandGroup(replacing: .newItem) {
+                Button("Welcome") { if model.confirmDiscard() { model.showWelcome = true } }
                 Button("New Document") { model.newDocument() }.keyboardShortcut("n")
                 Button("Open…") { model.openPanel() }.keyboardShortcut("o")
                 Button("Open Project Folder…") { model.openPanel(folder: true) }.keyboardShortcut("o", modifiers: [.command, .shift])
@@ -57,7 +61,7 @@ struct StudioView: View {
     private let modes = [("folder", "Files"), ("magnifyingglass", "Search"), ("list.bullet.indent", "Outline"), ("x.squareroot", "Symbols"), ("exclamationmark.triangle", "Issues")]
     var body: some View {
         HSplitView {
-            if model.sidebar { sidebar.frame(minWidth: 190, idealWidth: 260, maxWidth: 340) }
+            if model.sidebar { sidebar.frame(minWidth: 190, idealWidth: 230, maxWidth: 260) }
             VStack(spacing: 0) {
                 SourceEditor(model: model)
                 if model.showDiagnostics && !model.diagnostics.isEmpty {
@@ -115,12 +119,12 @@ struct StudioView: View {
             HStack(spacing: 0) {
                 ForEach(0..<modes.count, id: \.self) { index in
                     Button { section = index } label: {
-                        Image(systemName: modes[index].0).font(.system(size: 12)).frame(width: 30, height: 27)
+                        Image(systemName: modes[index].0).font(.system(size: 12)).frame(width: 29, height: 29)
                             .foregroundStyle(section == index ? Color.white : Color.primary)
                             .background(section == index ? Color.blue : Color.clear, in: Capsule())
                     }.buttonStyle(.plain).help(modes[index].1).accessibilityLabel(modes[index].1)
                 }
-            }.padding(3).background(Color.primary.opacity(0.055), in: Capsule()).padding(.top, 8)
+            }.padding(3).background(Color.primary.opacity(0.055), in: Capsule()).padding(.top, 6)
             if section == 0 {
                 ScrollView {
                     VStack(spacing: 1) {
@@ -136,37 +140,28 @@ struct StudioView: View {
                     Button { model.showSettings = true } label: { Image(systemName: "gearshape") }.help("Settings")
                 }.buttonStyle(.borderless).foregroundStyle(.secondary).padding(12)
             } else if section == 1 {
-                TextField("Find in document", text: $search).textFieldStyle(.roundedBorder).padding(.horizontal, 12)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(searchResults) { item in
-                            Button { model.goToLine(item.id) } label: { VStack(alignment: .leading, spacing: 4) { Text("Line \(item.id)").font(.caption2).foregroundStyle(.secondary); Text(item.title).font(.system(size: 12)).lineLimit(3) }.frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.plain)
-                            Divider()
-                        }
-                        if searchResults.isEmpty { Text(search.isEmpty ? "Search the current source document." : "No matches").font(.caption).foregroundStyle(.secondary) }
-                    }.padding(12)
-                }
+                ProjectSearchPane(model: model)
             } else if section == 2 {
-                ScrollView { VStack(alignment: .leading, spacing: 4) {
-                    ForEach(model.outline) { item in Button { model.goToLine(item.id) } label: { Label(item.title, systemImage: "text.alignleft").font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading).padding(8) }.buttonStyle(.plain) }
-                    if model.outline.isEmpty { Text("Headings appear here.").font(.caption).foregroundStyle(.secondary).padding() }
-                }.padding(6) }
+                ScrollView {
+                    if let root = model.pdf?.outlineRoot { PDFOutlineRows(node: root, model: model).padding(.horizontal, 10) }
+                    else { VStack(alignment: .leading) { ForEach(model.outline) { item in Button(item.title) { model.goToLine(item.id) }.buttonStyle(.plain).padding(6) } }.padding(10) }
+                }
             } else if section == 3 {
-                VStack(spacing: 16) { Image(systemName: "x.squareroot").font(.system(size: 36)).foregroundStyle(.secondary); Text("Mathematical symbols").font(.headline); Button("Open Symbol Library") { model.showSymbols = true }.buttonStyle(.bordered) }.padding(.top, 30)
-                Spacer()
+                SymbolPalette(model: model)
             } else {
-                ScrollView { VStack(alignment: .leading, spacing: 12) {
-                    Label(model.diagnostics.isEmpty ? "No issues" : "Compiler diagnostics", systemImage: model.diagnostics.isEmpty ? "checkmark.circle" : "exclamationmark.triangle").font(.headline)
-                    Text(model.diagnostics.isEmpty ? model.status : model.diagnostics).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
-                    if let line = model.errorLine { Button("Go to line \(line)") { model.goToLine(line) } }
-                    Button("Compile Again") { model.compile() }.disabled(model.compiling)
-                }.frame(maxWidth: .infinity, alignment: .leading).padding(14) }
+                if model.diagnostics.isEmpty {
+                    Spacer()
+                    VStack(spacing: 13) { Image(systemName: "checkmark.circle").font(.system(size: 32, weight: .ultraLight)).foregroundStyle(.tertiary); Text("No problems.").font(.system(size: 14)).foregroundStyle(.secondary) }
+                    Spacer()
+                } else {
+                    ScrollView { VStack(alignment: .leading, spacing: 12) {
+                        Text(model.diagnostics).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                        if let line = model.errorLine { Button("Go to line \(line)") { model.goToLine(line) } }
+                        Button("Compile Again") { model.compile() }.disabled(model.compiling)
+                    }.padding(14) }
+                }
             }
         }.background(Color(nsColor: .windowBackgroundColor))
-    }
-    var searchResults: [OutlineItem] {
-        guard !search.isEmpty else { return [] }
-        return model.text.components(separatedBy: "\n").enumerated().compactMap { i, text in text.localizedCaseInsensitiveContains(search) ? OutlineItem(id: i + 1, title: text) : nil }
     }
     func formatButton(_ icon: String, _ title: String, _ prefix: String, _ suffix: String) -> some View {
         Button { model.wrapSelection(prefix, suffix) } label: { Image(systemName: icon) }.help(title)
@@ -176,14 +171,15 @@ struct StudioView: View {
     }
 }
 struct ProjectFileRow: View {
-    let name: String; let active: Bool; let ext: String; let action: () -> Void
+    let name: String; let active: Bool; let ext: String; var indent: CGFloat = 0; let action: () -> Void
     var body: some View {
         Button(action: action) {
             HStack(spacing: 7) {
                 if ext == "typ" { Text("t").font(.system(size: 16, weight: .bold, design: .serif)).foregroundStyle(active ? .white : .teal).frame(width: 16) }
-                else { Image(systemName: ext == "pdf" ? "doc.fill" : ["png", "jpg", "jpeg", "svg"].contains(ext) ? "photo" : "book.closed.fill").foregroundStyle(active ? Color.white : ext == "pdf" ? .red : .brown).frame(width: 16) }
+                else if ext == "json" { Text("{}").font(.system(size: 12, design: .monospaced)).fixedSize().foregroundStyle(active ? .white : .orange).frame(width: 18) }
+                else { Image(systemName: ext == "pdf" ? "doc.fill" : ["png", "jpg", "jpeg", "svg"].contains(ext) ? "photo" : ["md", "txt", "rst"].contains(ext) ? "doc.text.fill" : ext == "bib" ? "books.vertical.fill" : "doc.fill").foregroundStyle(active ? Color.white : ext == "pdf" ? .red : .gray).frame(width: 16) }
                 Text(name).font(.system(size: 12)).lineLimit(1); Spacer(minLength: 0)
-            }.padding(.horizontal, 9).frame(height: 25).foregroundStyle(active ? .white : .primary)
+            }.padding(.leading, indent + 9).padding(.trailing, 5).frame(height: 25).foregroundStyle(active ? .white : .primary)
                 .background(active ? Color.blue : .clear, in: RoundedRectangle(cornerRadius: 6))
         }.buttonStyle(.plain)
     }
@@ -191,45 +187,50 @@ struct ProjectFileRow: View {
 struct ProjectBranch: View {
     @ObservedObject var model: StudioModel
     let directory: URL; let depth: Int
-    var children: [URL] {
-        var entries = Set<URL>()
-        for file in model.files where file.path.hasPrefix(directory.path + "/") {
-            let suffix = String(file.path.dropFirst(directory.path.count + 1))
-            if let first = suffix.split(separator: "/").first { entries.insert(directory.appendingPathComponent(String(first))) }
-        }
-        return entries.sorted { a, b in
-            let ad = isFolder(a), bd = isFolder(b)
-            return ad == bd ? a.lastPathComponent.localizedStandardCompare(b.lastPathComponent) == .orderedAscending : ad
-        }
-    }
-    func isFolder(_ url: URL) -> Bool { model.files.contains { $0.path.hasPrefix(url.path + "/") } }
+    @State private var children: [URL] = []
     var body: some View {
+        VStack(spacing: 1) {
         ForEach(children, id: \.self) { url in
-            if isFolder(url) {
-                DisclosureGroup { ProjectBranch(model: model, directory: url, depth: depth + 1) } label: {
-                    Label(url.lastPathComponent, systemImage: "folder.fill").font(.system(size: 12)).foregroundStyle(.primary)
-                }.tint(.blue).padding(.leading, 8).padding(.trailing, 4)
-            } else { ProjectFileRow(name: url.lastPathComponent, active: model.fileURL == url, ext: url.pathExtension, action: { model.openFile(url) }) }
+            if ProjectFiles.isDirectory(url) {
+                let expanded = model.expandedDirectories.contains(url.path)
+                Button {
+                    if expanded { model.expandedDirectories.remove(url.path) } else { model.expandedDirectories.insert(url.path) }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary).frame(width: 10)
+                        Image(systemName: "folder.fill").foregroundStyle(Color(red: 0.25, green: 0.64, blue: 1))
+                        Text(url.lastPathComponent).font(.system(size: 12)); Spacer()
+                    }.padding(.leading, CGFloat(depth * 15 + 5)).frame(height: 25).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                if expanded { ProjectBranch(model: model, directory: url, depth: depth + 1) }
+            } else {
+                ProjectFileRow(name: url.lastPathComponent, active: model.fileURL == url, ext: url.pathExtension, indent: CGFloat(depth * 15 + 15), action: { model.openFile(url) })
+            }
+        }
+        }.task(id: model.fileTreeRevision) { children = ProjectFiles.children(directory) }
+    }
+}
+struct PDFOutlineRows: View {
+    let node: PDFOutline
+    @ObservedObject var model: StudioModel
+    var body: some View {
+        ForEach(0..<node.numberOfChildren, id: \.self) { i in
+            if let child = node.child(at: i) {
+                if child.numberOfChildren > 0 {
+                    DisclosureGroup { PDFOutlineRows(node: child, model: model) } label: {
+                        Button(child.label ?? "Heading") { if let dest = child.destination { model.preview?.go(to: dest) } }.buttonStyle(.plain).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    }.padding(.vertical, 3)
+                } else {
+                    Button(child.label ?? "Heading") { if let dest = child.destination { model.preview?.go(to: dest) } }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).padding(.vertical, 4).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
     }
 }
 struct SymbolsView: View {
     @ObservedObject var model: StudioModel
-    @State var query = ""
-    let symbols = [("∫", "integral"), ("∑", "sum"), ("∏", "product"), ("∞", "infinity"), ("√", "sqrt(x)"), ("α", "alpha"), ("β", "beta"), ("γ", "gamma"), ("δ", "delta"), ("θ", "theta"), ("λ", "lambda"), ("μ", "mu"), ("π", "pi"), ("σ", "sigma"), ("φ", "phi"), ("ω", "omega"), ("∂", "diff"), ("∇", "nabla"), ("≤", "lt.eq"), ("≥", "gt.eq"), ("≠", "eq.not"), ("≈", "approx"), ("→", "arrow.r"), ("⇔", "arrow.l.r.double"), ("∈", "in"), ("∅", "nothing")]
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack { Text("Symbol library").font(.title2.bold()); Spacer(); Button("Done") { model.showSymbols = false } }
-            Text("Insert a Typst math expression at the cursor.").foregroundStyle(.secondary)
-            TextField("Search symbols…", text: $query).textFieldStyle(.roundedBorder)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 10) {
-                ForEach(symbols.filter { query.isEmpty || $0.1.localizedCaseInsensitiveContains(query) }, id: \.1) { symbol in
-                    Button { model.showSymbols = false; model.insert("$ " + symbol.1 + " $") } label: {
-                        VStack(spacing: 6) { Text(symbol.0).font(.system(size: 27, design: .serif)); Text(symbol.1).font(.system(size: 9)).lineLimit(1) }.frame(maxWidth: .infinity).frame(height: 62)
-                    }.buttonStyle(.bordered)
-                }
-            }
-        }.padding(24).frame(width: 600)
+        VStack { HStack { Text("Symbols").font(.title2.bold()); Spacer(); Button("Done") { model.showSymbols = false } }.padding(); SymbolPalette(model: model) }.frame(width: 440, height: 560)
     }
 }
 struct SettingsView: View {
@@ -259,7 +260,7 @@ struct WindowGuard: NSViewRepresentable {
     func makeCoordinator() -> Guard { Guard(model) }
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        DispatchQueue.main.async { view.window?.delegate = context.coordinator }
+        DispatchQueue.main.async { view.window?.delegate = context.coordinator; view.window?.titleVisibility = .hidden }
         return view
     }
     func updateNSView(_ view: NSView, context: Context) {}

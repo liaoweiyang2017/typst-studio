@@ -1,6 +1,20 @@
 import SwiftUI
 import PDFKit
 final class StudioPDFView: PDFView {
+    var fitsWidth = true
+    private var fitting = false
+    private var lastWidth: CGFloat = 0
+    override func layout() {
+        super.layout()
+        if fitsWidth && abs(bounds.width - lastWidth) > 0.5 { fitWidth() }
+    }
+    func fitWidth() {
+        guard !fitting, bounds.width > 20, let page = currentPage ?? document?.page(at: 0) else { return }
+        fitting = true; defer { fitting = false }
+        lastWidth = bounds.width; autoScales = false
+        let pageWidth = page.bounds(for: displayBox).width
+        if pageWidth > 0 { scaleFactor = max(0.1, (bounds.width - 24) / pageWidth) }
+    }
     var clickedText: ((String) -> Void)?
     override func mouseDown(with event: NSEvent) {
         super.mouseDown(with: event)
@@ -10,7 +24,7 @@ final class StudioPDFView: PDFView {
     }
 }
 @MainActor final class PreviewControls: ObservableObject {
-    weak var view: PDFView?
+    weak var view: StudioPDFView?
     @Published var percent = 100
     @Published var page = 0
     func update() {
@@ -24,7 +38,7 @@ struct PDFCanvas: NSViewRepresentable {
     @ObservedObject var controls: PreviewControls
     func makeCoordinator() -> Coordinator { Coordinator(controls) }
     func makeNSView(context: Context) -> StudioPDFView {
-        let view = StudioPDFView(); view.autoScales = true; view.displayMode = .singlePageContinuous; view.displayDirection = .vertical
+        let view = StudioPDFView(); view.autoScales = false; view.displayMode = .singlePageContinuous; view.displayDirection = .vertical
         view.backgroundColor = NSColor(calibratedWhite: 0.95, alpha: 1); view.pageShadowsEnabled = false
         view.clickedText = { model.jumpFromPDF($0) }; model.preview = view; controls.view = view
         context.coordinator.observe(view)
@@ -33,14 +47,14 @@ struct PDFCanvas: NSViewRepresentable {
     func updateNSView(_ view: StudioPDFView, context: Context) {
         guard view.document !== model.pdf else { return }
         let page = view.currentPage.flatMap { view.document?.index(for: $0) } ?? 0
-        let scale = view.scaleFactor, auto = view.autoScales
+        let scale = view.scaleFactor, auto = view.fitsWidth
         let destination = view.currentDestination
         view.document = model.pdf
         if let p = model.pdf?.page(at: min(page, max(0, (model.pdf?.pageCount ?? 1) - 1))) {
             if let destination { view.go(to: PDFDestination(page: p, at: destination.point)) } else { view.go(to: p) }
         }
         if !auto { view.scaleFactor = scale }
-        DispatchQueue.main.async { controls.update() }
+        DispatchQueue.main.async { if view.fitsWidth { view.fitWidth() }; controls.update() }
     }
     @MainActor final class Coordinator {
         let controls: PreviewControls
@@ -60,10 +74,10 @@ struct PreviewPane: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 13) {
-                Button { controls.view?.zoomOut(nil) } label: { Image(systemName: "minus.magnifyingglass") }.help("Zoom out")
+                Button { controls.view?.fitsWidth = false; controls.view?.zoomOut(nil) } label: { Image(systemName: "minus.magnifyingglass") }.help("Zoom out")
                 Text("\(controls.percent)%").monospacedDigit().frame(minWidth: 35)
-                Button { controls.view?.zoomIn(nil) } label: { Image(systemName: "plus.magnifyingglass") }.help("Zoom in")
-                Button { controls.view?.autoScales = true } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").foregroundStyle(.blue) }.help("Fit page")
+                Button { controls.view?.fitsWidth = false; controls.view?.zoomIn(nil) } label: { Image(systemName: "plus.magnifyingglass") }.help("Zoom in")
+                Button { controls.view?.fitsWidth = true; controls.view?.fitWidth() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right").foregroundStyle(.blue) }.help("Fit width")
                 Spacer(minLength: 4)
                 Text("Page \(controls.page) of \(model.pdf?.pageCount ?? 0)").foregroundStyle(.secondary).monospacedDigit()
                 Spacer(minLength: 4)

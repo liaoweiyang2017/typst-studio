@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-swift build -c release
-BIN_DIR=$(swift build -c release --show-bin-path)
+swift build -c release --arch arm64
+BIN_DIR=$(swift build -c release --arch arm64 --show-bin-path)
 APP=${APP_DESTINATION:-"$HOME/Applications/Typst Studio.app"}
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers" .build/AppIcon.iconset
 install -m 755 "$BIN_DIR/TypstStudio" "$APP/Contents/MacOS/TypstStudio"
@@ -21,6 +21,8 @@ xattr -cr "$APP"
 codesign --force --sign - "$APP/Contents/Helpers/typst"
 codesign --force --sign - "$APP"
 codesign --verify --deep --strict "$APP"
+VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist")
+[[ "$(lipo -archs "$APP/Contents/Helpers/typst")" == "arm64" ]] || { echo "Typst compiler must be arm64"; exit 1; }
 mkdir -p dist
-ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/Typst-Studio-0.1.0-macOS-arm64.zip"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/Typst-Studio-$VERSION-macOS-arm64.zip"
 echo "$APP"
