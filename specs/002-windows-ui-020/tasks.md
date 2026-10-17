@@ -8,6 +8,6 @@
 - [x] T030 阶段三：欢迎页、最近工程ListView/更多菜单/空态、状态栏欢迎状态（UI-03/04/11）。Debug x64通过；阶段三commit。
 - [x] T040 阶段四：三栏/侧栏SelectorBar/工具栏、编辑头/查找替换/格式工具栏、PDF图标工具栏/纸张、状态栏（UI-05至11）。Debug x64通过；阶段四commit。
 - [x] T050 阶段五：本地化、Tooltip、焦点/过渡、主题、尺寸/DPI与回归（UI-12/REG-01）。Debug x64通过；阶段五commit。未实测的DPI/人工交互明确列于acceptance.md。
-- [ ] T060 Release ARM64/x64、本地安装包、版本与校验和、私有源码/公开release（REL-01）。
+- [x] T060 Release ARM64/x64、本地安装包、版本与校验和、私有源码/公开release（REL-01）。
 
 每项验收在 acceptance.md 记录实际结果。阶段内必要的小修不另扩版本；不提前将未执行检查标为通过。

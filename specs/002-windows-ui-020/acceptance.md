@@ -17,7 +17,7 @@
 | UI-11 状态栏 | 通过 | 28 DIP、语义颜色、侧栏错误数；右下角按最新要求改软件名和版本。 |
 | UI-12 主题/语言/键盘/DPI | 部分验证 | 原生Dark中文/Light英文、设置无溢出、截图及偏好持久化通过。VM实际200%缩放；100/125/150%和完整Tab遍历未实测，不标通过。 |
 | REG-01 原有功能回归 | 通过 | ARM64/x64核心测试：原子保存、CRLF、外部冲突、实时编译、错误恢复、选择/渲染、重复公式/跨文件映射；原生smoke补充编辑撤销和五面板。x64在ARM Windows仿真运行。 |
-| REL-01 构建与发布 | 进行中 | 五阶段Debug x64均成功，0警告/0错误。最后Release/安装包/远程校验待完成。 |
+| REL-01 构建与发布 | 通过 | 五阶段Debug x64与最终Release ARM64/x64成功，0警告/0错误。本地Inno安装包生成；隔离AppId测试安装后两架构原生smoke成功。私有源码已推送，公开windows-v0.2.0已发布，GitHub资源SHA256与本地完全一致。 |
 
 ## 测试证据
 
@@ -34,3 +34,15 @@
 - 最近记录加载前清空并去重，防止同一进程重载设置出现重复；路径禁用换行。
 
 未完成的人工交互及指定DPI验证仍保留为验收缺口，不以编译成功替代。
+
+## 最终交付
+
+- 实现提交：4470893（前四阶段分别85edc94、3f94c81、7d6b9f5、0b7af6b）。
+- [公开 Windows 0.2.0 Release](https://github.com/liaoweiyang2017/typst-studio-releases/releases/tag/windows-v0.2.0)。未新增/运行GitHub Actions，Mac更新源保持原状。
+- 本地安装包：Windows/artifacts/installers/Typst-Studio-0.2.0-Windows-{arm64,x64}-Setup.exe。
+- 安装测试采用与发行版相同payload的独立QA AppId/安装目录，避免覆盖现有安装；测试后移除QA安装。安装后结果见evidence/installed-arm64.json及installed-x64.json。
+- [校验和](evidence/SHA256SUMS-0.2.0.txt)。两种安装包都包含Tinymist/PDFium/运行时，无PDB。
+
+## 修改文件范围
+
+App.xaml与Styles/DesignTokens.xaml集中资源；MainWindow.Chrome/Welcome负责原生标题栏与欢迎页；MainWindow.Files/Sidebar及SidebarTabs负责文件与五面板；MainWindow.EditorTools/PreviewTools和SourceEditor/PdfViewer负责界面命令与布局；MainWindow.Settings、Ui、UiText负责设置与语言；MainWindow.Smoke及原有smoke入口补充回归；版本、installer、README、debug-x64工具与Spec文档同步更新。Windows Core、vendor和Mac源码没有改动。

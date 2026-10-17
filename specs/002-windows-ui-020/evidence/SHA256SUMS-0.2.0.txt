@@ -1,0 +1,2 @@
+732562cd93c738a214ed1d7ce9ffc6e8280ebb315581b04e0c61d1fb3e9af586  Typst-Studio-0.2.0-Windows-arm64-Setup.exe
+196937d4fbc7bd967479c960315a1580f4e426b7ea866d023d0be36feb6f4193  Typst-Studio-0.2.0-Windows-x64-Setup.exe
