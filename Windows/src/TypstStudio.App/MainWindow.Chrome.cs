@@ -16,6 +16,7 @@ public sealed partial class MainWindow
         ExtendsContentIntoTitleBar = true; SetTitleBar(StudioTitleBar);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         StudioTitleBar.SizeChanged += (_, _) => UpdateTitleBarRegions();
+        TitleLeft.SizeChanged += (_, _) => UpdateTitleBarRegions();
         MainMenu.SizeChanged += (_, _) => UpdateTitleBarRegions();
         AppWindow.Changed += (_, _) => UpdateTitleBarRegions();
         Root.Loaded += (_, _) => { Root.XamlRoot.Changed += (_, _) => UpdateTitleBarRegions(); UpdateTitleBarRegions(); SyncCaptionColors(); };
@@ -55,6 +56,7 @@ public sealed partial class MainWindow
         _sidebarHidden = !_sidebarHidden;
         if (_sidebarHidden) { _sidebarSavedWidth = SidebarColumn.ActualWidth; SidebarColumn.MinWidth = 0; SidebarColumn.Width = new GridLength(0); SidebarDivider.Visibility = Visibility.Collapsed; }
         else { SidebarColumn.MinWidth = Ui.D("SidebarMinWidth"); SidebarColumn.Width = new GridLength(Math.Clamp(_sidebarSavedWidth, Ui.D("SidebarMinWidth"), Ui.D("SidebarMaxWidth"))); SidebarDivider.Visibility = Visibility.Visible; }
+        SidebarContainer.Visibility = _sidebarHidden ? Visibility.Collapsed : Visibility.Visible; SidebarDividerColumn.Width = new GridLength(_sidebarHidden ? 0 : Ui.D("DividerHitWidth"));
         SyncChrome();
     }
 }

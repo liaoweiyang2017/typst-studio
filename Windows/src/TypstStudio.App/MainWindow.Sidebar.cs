@@ -8,19 +8,23 @@ public sealed partial class MainWindow
 {
     private readonly AutoSuggestBox _projectQuery = new() { QueryIcon = new SymbolIcon(Symbol.Find) };
     private readonly CheckBox _matchCase = new();
-    private readonly TextBlock _searchStatus = new() { TextWrapping = TextWrapping.Wrap, Opacity = 0.65, FontSize = 12 };
+    private readonly TextBlock _searchStatus = new() { TextWrapping = TextWrapping.Wrap, Opacity = Ui.D("SecondaryOpacity"), FontSize = Ui.D("FontCaption") };
     private readonly ListView _searchResults = new() { IsItemClickEnabled = true, SelectionMode = ListViewSelectionMode.Single };
-    private readonly TextBlock _outlineStatus = new() { TextWrapping = TextWrapping.Wrap, Opacity = 0.65, FontSize = 12 };
+    private readonly TextBlock _outlineStatus = new() { TextWrapping = TextWrapping.Wrap, Opacity = Ui.D("SecondaryOpacity"), FontSize = Ui.D("FontCaption") };
     private readonly TreeView _outlineTree = new() { SelectionMode = TreeViewSelectionMode.Single };
     private readonly AutoSuggestBox _symbolQuery = new() { QueryIcon = new SymbolIcon(Symbol.Find) };
     private readonly GridView _symbolList = new() { IsItemClickEnabled = true, SelectionMode = ListViewSelectionMode.None };
-    private readonly TextBlock _problemStatus = new() { TextWrapping = TextWrapping.Wrap, Opacity = 0.65, FontSize = 13, MaxLines = 6, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly TextBlock _problemStatus = new() { TextWrapping = TextWrapping.Wrap, Opacity = Ui.D("SecondaryOpacity"), FontSize = Ui.D("FontCaption"), MaxLines = 6, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly ListView _problemList = new() { IsItemClickEnabled = true, SelectionMode = ListViewSelectionMode.Single };
     private readonly Button _retryCompile = new();
     private readonly List<Grid> _sidebarPages = [];
     private CancellationTokenSource _sidebarWork = new();
     private string _compileError = "";
     private string? _lastSymbolFilter;
+    private byte[]? _outlinePdf;
+    private string? _outlineSource;
+    private (string? Root, string Query, bool MatchCase, int Revision)? _searchKey;
+    private string? _problemSignature;
     [Microsoft.UI.Xaml.Data.Bindable]
     public sealed record SidebarRow(string Title, string Detail, object Value);
     [Microsoft.UI.Xaml.Data.Bindable]
@@ -29,17 +33,17 @@ public sealed partial class MainWindow
     { public override string ToString() => Title; }
     private static Grid SidebarPage(FrameworkElement header, FrameworkElement body, FrameworkElement? footer = null)
     {
-        var grid = new Grid { RowSpacing = 8 }; grid.RowDefinitions.Add(new() { Height = GridLength.Auto }); grid.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        var grid = new Grid { RowSpacing = Ui.D("Gap8") }; grid.RowDefinitions.Add(new() { Height = GridLength.Auto }); grid.RowDefinitions.Add(new() { Height = new(1, GridUnitType.Star) }); grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         grid.Children.Add(header); Grid.SetRow(body, 1); grid.Children.Add(body); if (footer != null) { Grid.SetRow(footer, 2); grid.Children.Add(footer); } return grid;
     }
     private void InitializeSidebar()
     {
-        var rowTemplate = (DataTemplate)XamlReader.Load("<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'><StackPanel Padding='2,6' Spacing='4' ToolTipService.ToolTip='{Binding Detail}'><TextBlock Text='{Binding Title}' FontWeight='SemiBold' FontSize='12' TextWrapping='Wrap'/><TextBlock Text='{Binding Detail}' FontSize='12' Opacity='0.7' TextWrapping='Wrap' MaxLines='3' TextTrimming='CharacterEllipsis'/></StackPanel></DataTemplate>");
+        var rowTemplate = (DataTemplate)XamlReader.Load("<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'><StackPanel Padding='{ThemeResource Inset4_8}' Spacing='{ThemeResource Space4}' ToolTipService.ToolTip='{Binding Detail}'><TextBlock Text='{Binding Title}' FontWeight='SemiBold' FontSize='{ThemeResource FontCaption}' TextWrapping='Wrap'/><TextBlock Text='{Binding Detail}' FontSize='{ThemeResource FontCaption}' Opacity='{ThemeResource SecondaryOpacity}' TextWrapping='Wrap' MaxLines='3' TextTrimming='CharacterEllipsis'/></StackPanel></DataTemplate>");
         _searchResults.ItemTemplate = rowTemplate; _problemList.ItemTemplate = rowTemplate;
-        var searchHeader = new StackPanel { Spacing = 4 }; searchHeader.Children.Add(_projectQuery); searchHeader.Children.Add(_matchCase); searchHeader.Children.Add(_searchStatus);
+        var searchHeader = new StackPanel { Spacing = Ui.D("Gap4") }; searchHeader.Children.Add(_projectQuery); searchHeader.Children.Add(_matchCase); searchHeader.Children.Add(_searchStatus);
         _sidebarPages.Add(SidebarPage(searchHeader, _searchResults));
         _sidebarPages.Add(SidebarPage(_outlineStatus, _outlineTree));
-        _symbolList.ItemTemplate = (DataTemplate)XamlReader.Load("<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'><StackPanel Width='52' Padding='2,6' ToolTipService.ToolTip='{Binding Name}'><TextBlock Text='{Binding Glyph}' FontFamily='Cambria Math' FontSize='26' HorizontalAlignment='Center'/><TextBlock Text='{Binding Name}' FontSize='10' TextTrimming='CharacterEllipsis' HorizontalAlignment='Center'/></StackPanel></DataTemplate>");
+        _symbolList.ItemTemplate = (DataTemplate)XamlReader.Load("<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'><StackPanel Width='{ThemeResource SymbolCellWidth}' Padding='{ThemeResource Inset4_8}' ToolTipService.ToolTip='{Binding Name}'><TextBlock Text='{Binding Glyph}' FontFamily='{ThemeResource StudioMathFont}' FontSize='{ThemeResource FontSymbol}' HorizontalAlignment='Center'/><TextBlock Text='{Binding Name}' FontSize='{ThemeResource FontCaption}' TextTrimming='CharacterEllipsis' HorizontalAlignment='Center'/></StackPanel></DataTemplate>");
         _sidebarPages.Add(SidebarPage(_symbolQuery, _symbolList));
         _sidebarPages.Add(SidebarPage(_problemStatus, _problemList, _retryCompile));
         _projectQuery.TextChanged += (_, _) => { if (SidebarPicker.SelectedIndex == 1) _ = RefreshSidebarAsync(); };
@@ -57,12 +61,12 @@ public sealed partial class MainWindow
         if (SidebarPicker == null || _sidebarPages.Count == 0) return;
         string[] labels = [T("工程文件", "Project files"), T("工程搜索", "Search"), T("文档大纲", "Outline"), T("数学符号", "Symbols"), T("编译问题", "Problems")];
         string[] glyphs = ["\uE8B7", "\uE721", "\uE8FD", "\uE94F", "\uE7BA"];
-        if (SidebarPicker.Items.Count == 0) foreach (var _ in labels) SidebarPicker.Items.Add(new ComboBoxItem());
-        for (var i = 0; i < labels.Length; i++) { var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 }; row.Children.Add(i == 3 ? new TextBlock { Text = "√", FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cambria Math"), FontSize = 20, VerticalAlignment = VerticalAlignment.Center } : new FontIcon { Glyph = glyphs[i], FontSize = 16 }); row.Children.Add(new TextBlock { Text = labels[i], VerticalAlignment = VerticalAlignment.Center }); ((ComboBoxItem)SidebarPicker.Items[i]).Content = row; }
+        SidebarPicker.SetItems(labels, glyphs);
+        _searchKey = null; _problemSignature = null; _outlinePdf = null; _outlineSource = null;
         _projectQuery.PlaceholderText = T("搜索工程源码", "Search project source"); _matchCase.Content = T("区分大小写", "Match case"); _symbolQuery.PlaceholderText = T("搜索符号或名称", "Search symbols or names"); _retryCompile.Content = T("重新编译", "Compile again");
         FilterSymbols(); _ = RefreshSidebarAsync();
     }
-    private void SidebarPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void SidebarPicker_SelectionChanged(object sender, EventArgs e)
     {
         if (SidebarTools == null || _sidebarPages.Count == 0) return;
         var mode = Math.Max(0, SidebarPicker.SelectedIndex);
@@ -88,19 +92,25 @@ public sealed partial class MainWindow
         {
             if (mode == 1)
             {
-                var query = _projectQuery.Text; _searchResults.ItemsSource = null;
+                var query = _projectQuery.Text;
+                var key = (root, query, _matchCase.IsChecked == true, _revision);
+                if (_searchKey == key && _searchResults.ItemsSource != null) return;
+                _searchResults.ItemsSource = null;
                 if (root == null || string.IsNullOrWhiteSpace(query)) { _searchStatus.Text = T("搜索工程中的 Typst 源码。", "Search the project's Typst source files."); return; }
                 _searchStatus.Text = T("正在搜索…", "Searching…"); var matchCase = _matchCase.IsChecked == true;
                 var buffers = _buffers.ToDictionary(p => p.Key, p => p.Value.Text, StringComparer.OrdinalIgnoreCase);
                 await Task.Delay(200, token);
                 var hits = await Task.Run(async () => await ProjectSearch.FindAsync(ProjectFiles.Sources(root, token), buffers, query, matchCase, token), token);
                 if (token.IsCancellationRequested || root != _root) return;
+                _searchKey = key;
                 _searchResults.ItemsSource = hits.Select(h => new SidebarRow($"{Path.GetRelativePath(root, h.Path)}:{h.Line + 1}", h.Preview, h)).ToArray();
                 _searchStatus.Text = hits.Count == 200 ? T("显示前 200 个结果", "First 200 results") : T($"{hits.Count} 个结果", $"{hits.Count} results");
             }
             else if (mode == 2)
             {
+                if (_outlineTree.RootNodes.Count > 0 && ReferenceEquals(_outlinePdf, _pdf) && (_pdf != null || _outlineSource == _current?.Text)) return;
                 var headings = await Preview.GetOutlineAsync(); if (token.IsCancellationRequested) return;
+                _outlinePdf = _pdf; _outlineSource = _current?.Text;
                 _outlineTree.RootNodes.Clear();
                 TreeViewNode Node(PdfHeading heading) { var node = new TreeViewNode { Content = new OutlineRow(heading.Title, heading.Destination), IsExpanded = true }; foreach (var child in heading.Children) node.Children.Add(Node(child)); return node; }
                 foreach (var heading in headings) _outlineTree.RootNodes.Add(Node(heading));
@@ -122,6 +132,10 @@ public sealed partial class MainWindow
             else if (mode == 4)
             {
                 var problems = _session?.Problems ?? [];
+                var signature = _diagnostics + _compileError;
+                _retryCompile.IsEnabled = _session != null && !Busy.IsActive;
+                if (_problemSignature == signature && _problemList.ItemsSource != null) return;
+                _problemSignature = signature;
                 _problemList.ItemsSource = problems.Select(p => new SidebarRow($"{(root != null && Path.IsPathFullyQualified(p.Path) && ProjectFiles.Inside(root, p.Path) ? Path.GetRelativePath(root, p.Path) : p.Path)}:{p.Line + 1}", p.Message, p)).ToArray();
                 _problemStatus.Text = problems.Count > 0 ? T($"{problems.Count} 个问题", $"{problems.Count} problems") : _compileError.Length > 0 ? _compileError : T("✓ 没有问题。", "✓ No problems."); _retryCompile.IsEnabled = _session != null && !Busy.IsActive;
             }

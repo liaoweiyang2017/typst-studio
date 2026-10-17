@@ -13,13 +13,20 @@ namespace TypstStudio.App;
 public sealed class PdfViewer : Grid
 {
     private readonly ScrollViewer _scroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-    private readonly StackPanel _stack = new() { Spacing = 12, Margin = new Thickness(12) };
+    private readonly StackPanel _stack = new() { Spacing = Ui.D("PaperMargin"), Margin = new Thickness(Ui.D("PaperMargin")) };
     private readonly List<(Grid Host, Image Image, Canvas Marker)> _pages = [];
     private readonly Dictionary<int, int> _renderedWidths = [];
     private readonly SemaphoreSlim _renderGate = new(1);
     private PdfDocument? _document;
     private CancellationTokenSource _render = new();
     private double _zoom = 1;
+    private double PaperInset => Ui.D("PaperMargin");
+    private double AvailablePageWidth => Math.Max(Ui.D("MinimumPaperWidth"), ActualWidth - 2 * PaperInset - Ui.D("Space4"));
+    public int PageCount => _pages.Count;
+    public double ZoomPercent => _document == null || _pages.Count == 0 ? 100 : _pages[0].Host.Width / _document.Pages[0].Width * 72 / 96 * 100;
+    public event Action? ViewMetricsChanged;
+    public void SetZoomPercent(double percent) { if (_document == null || _pages.Count == 0) return; _fitPage = false; _zoom = Math.Clamp(percent, 50, 200) / 100 * 96 / 72 * _document.Pages[0].Width / AvailablePageWidth; LayoutPages(); ScheduleRender(); }
+
     private long _generation;
     private (int Page, Point Point)? _selectionStart;
     private PdfTextSelection? _selection;
@@ -31,10 +38,10 @@ public sealed class PdfViewer : Grid
     private bool _fitPage;
     public int CurrentPage
     {
-        get { double y = 12; for (var i = 0; i < _pages.Count; i++) { y += _pages[i].Host.Height + 12; if (y > _scroll.VerticalOffset + 40) return i + 1; } return _pages.Count; }
+        get { double y = PaperInset; for (var i = 0; i < _pages.Count; i++) { y += _pages[i].Host.Height + PaperInset; if (y > _scroll.VerticalOffset + Ui.D("EditorHeaderHeight")) return i + 1; } return _pages.Count; }
     }
     public void MovePage(int delta)
-    { if (_pages.Count == 0) return; var index = Math.Clamp(CurrentPage - 1 + delta, 0, _pages.Count - 1); _scroll.ChangeView(null, _pages.Take(index).Sum(p => p.Host.Height + 12), null, true); }
+    { if (_pages.Count == 0) return; var index = Math.Clamp(CurrentPage - 1 + delta, 0, _pages.Count - 1); _scroll.ChangeView(null, _pages.Take(index).Sum(p => p.Host.Height + PaperInset), null, true); }
     public Task<IReadOnlyList<PdfHeading>> GetOutlineAsync() { var document = _document; return document == null ? Task.FromResult<IReadOnlyList<PdfHeading>>([]) : Task.Run(document.ReadOutline); }
     public void FitPage() { _fitPage = true; _zoom = 1; LayoutPages(); ScheduleRender(); }
     public void SetColorMode(string mode)
@@ -54,8 +61,9 @@ public sealed class PdfViewer : Grid
     }
     public PdfViewer()
     {
+        Background = Ui.Brush(this, "SolidBackgroundFillColorBaseBrush"); ActualThemeChanged += (_, _) => Background = Ui.Brush(this, "SolidBackgroundFillColorBaseBrush");
         _scroll.Content = _stack; Children.Add(_scroll);
-        _scroll.ViewChanged += (_, _) => { PageChanged?.Invoke(CurrentPage, _pages.Count); ScheduleRender(); };
+        _scroll.ViewChanged += (_, _) => { ViewMetricsChanged?.Invoke(); PageChanged?.Invoke(CurrentPage, _pages.Count); ScheduleRender(); };
         SizeChanged += (_, _) => { LayoutPages(); ScheduleRender(); };
     }
     public async Task SetDocumentAsync(byte[] bytes)
@@ -73,8 +81,9 @@ public sealed class PdfViewer : Grid
             var page = i;
             var image = new Image { Stretch = Stretch.Fill };
             var marker = new Canvas { IsHitTestVisible = false };
-            var host = new Grid { IsTabStop = true, Background = new SolidColorBrush(Microsoft.UI.Colors.White), HorizontalAlignment = HorizontalAlignment.Center };
+            var host = new Grid { IsTabStop = true, Background = Ui.Brush(this, "LayerFillColorDefaultBrush"), HorizontalAlignment = HorizontalAlignment.Center };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(host, $"PDF 第 {page + 1} 页");
+            host.Shadow = new ThemeShadow(); host.Translation = new System.Numerics.Vector3(0, 0, (float)Ui.D("PaperElevation"));
             host.Children.Add(image); host.Children.Add(marker);
             var copyKey = new KeyboardAccelerator { Key = VirtualKey.C, Modifiers = VirtualKeyModifiers.Control };
             copyKey.Invoked += (_, args) => { CopySelection(); args.Handled = true; }; host.KeyboardAccelerators.Add(copyKey);
@@ -90,15 +99,16 @@ public sealed class PdfViewer : Grid
         }
         PageChanged?.Invoke(CurrentPage, _pages.Count); LayoutPages(); _scroll.UpdateLayout(); _scroll.ChangeView(null, offset, null, true); ScheduleRender();
     }
-    public void Zoom(double factor) { if (_fitPage && _pages.Count > 0) _zoom = _pages[0].Host.Width / Math.Max(100, ActualWidth - 28); _fitPage = false; _zoom = Math.Clamp(_zoom * factor, 0.4, 3); LayoutPages(); ScheduleRender(); }
+    public void Zoom(double factor) { if (_fitPage && _pages.Count > 0) _zoom = _pages[0].Host.Width / AvailablePageWidth; _fitPage = false; _zoom = Math.Clamp(_zoom * factor, 0.4, 3); LayoutPages(); ScheduleRender(); }
     public void FitWidth() { _fitPage = false; _zoom = 1; LayoutPages(); ScheduleRender(); }
     private void LayoutPages()
     {
         if (_document == null || ActualWidth < 50) return;
-        var width = Math.Max(100, ActualWidth - 28) * _zoom;
-        if (_fitPage) width = Math.Min(width, Math.Max(100, ActualHeight - 24) * _document.Pages[0].Width / _document.Pages[0].Height);
+        var width = AvailablePageWidth * _zoom;
+        if (_fitPage) width = Math.Min(width, Math.Max(Ui.D("MinimumPaperWidth"), ActualHeight - 2 * PaperInset) * _document.Pages[0].Width / _document.Pages[0].Height);
         for (var i = 0; i < _pages.Count; i++)
         { var size = _document.Pages[i]; _pages[i].Host.Width = width; _pages[i].Host.Height = width * size.Height / size.Width; _pages[i].Marker.Children.Clear(); }
+        ViewMetricsChanged?.Invoke();
         _scroll.HorizontalScrollBarVisibility = _zoom > 1 ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
     }
     private async void ScheduleRender()
@@ -111,12 +121,12 @@ public sealed class PdfViewer : Grid
             try
             {
                 if (generation != _generation) return;
-                var y = 12.0; var visible = new HashSet<int>();
+                var y = PaperInset; var visible = new HashSet<int>();
                 for (var i = 0; i < _pages.Count; i++)
                 {
                     var item = _pages[i]; var bottom = y + item.Host.Height;
                     if (bottom >= _scroll.VerticalOffset - 250 && y <= _scroll.VerticalOffset + ActualHeight + 250) visible.Add(i);
-                    y = bottom + 12;
+                    y = bottom + PaperInset;
                 }
                 foreach (var index in _renderedWidths.Keys.ToArray()) if (!visible.Contains(index)) { _pages[index].Image.Source = null; _renderedWidths.Remove(index); }
                 foreach (var index in visible)
@@ -138,7 +148,7 @@ public sealed class PdfViewer : Grid
     {
         var index = point.Page - 1; if (_document == null || index < 0 || index >= _pages.Count) return;
         var scale = _pages[index].Host.Width / _document.Pages[index].Width;
-        var y = 12 + _pages.Take(index).Sum(p => p.Host.Height + 12) + point.Y * scale;
+        var y = PaperInset + _pages.Take(index).Sum(p => p.Host.Height + PaperInset) + point.Y * scale;
         _scroll.ChangeView(null, Math.Max(0, y - 100), null, true);
         Mark(index, point.X, point.Y - 8, 16 / scale, 16 / scale);
         ScheduleRender();
@@ -177,7 +187,7 @@ public sealed class PdfViewer : Grid
     {
         var scale = _pages[page].Host.Width / _document!.Pages[page].Width;
         var marker = new Rectangle { Stroke = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue), StrokeThickness = 1,
-            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(50, 0, 120, 215)), Width = Math.Max(3, width * scale), Height = Math.Max(3, height * scale) };
+            Fill = Ui.Brush(this, "AccentFillColorDefaultBrush"), Opacity = Ui.D("SelectionOpacity"), Width = Math.Max(3, width * scale), Height = Math.Max(3, height * scale) };
         Canvas.SetLeft(marker, x * scale); Canvas.SetTop(marker, y * scale); _pages[page].Marker.Children.Add(marker);
     }
     private void CopySelection()

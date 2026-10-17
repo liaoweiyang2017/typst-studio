@@ -25,6 +25,7 @@ public sealed partial class MainWindow : Window
     private bool _settingText, _closing, _disposed, _opening;
     private int _fileEpoch;
     private string _diagnostics = "";
+    private bool _pdfHintShown;
     private ContentDialog? _activeDialog;
     private readonly string _settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TypstStudio", "Windows", "settings.json");
     private readonly List<string> _recent = [];
@@ -37,16 +38,17 @@ public sealed partial class MainWindow : Window
         App.Trace("Main XAML loading"); InitializeComponent(); InitializeSidebar(); App.Trace("Main XAML loaded");
         var dpi = Math.Max(1, GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0);
         var work = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary).WorkArea;
-        var width = Math.Min((int)(1200 * dpi), work.Width - 48); var height = Math.Min((int)(800 * dpi), work.Height - 48);
+        var width = Math.Min((int)(Ui.D("WindowWidth") * dpi), work.Width - (int)Ui.D("Space48")); var height = Math.Min((int)(Ui.D("WindowHeight") * dpi), work.Height - (int)Ui.D("Space48"));
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(work.X + (work.Width - width) / 2, work.Y + (work.Height - height) / 2, width, height));
-        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter) { presenter.PreferredMinimumWidth = Math.Min((int)(880 * dpi), width); presenter.PreferredMinimumHeight = Math.Min((int)(500 * dpi), height); }
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter) { presenter.PreferredMinimumWidth = Math.Min((int)(Ui.D("WindowMinWidth") * dpi), width); presenter.PreferredMinimumHeight = Math.Min((int)(Ui.D("WindowMinHeight") * dpi), height); }
         App.Trace("Window resized"); AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Studio.ico"));
         App.Trace("Icon loaded"); ConfigureChrome();
         if (_args.Contains("--smoke")) _settingsPath = Path.Combine(Path.GetTempPath(), "TypstStudio-Smoke-" + Environment.ProcessId, "settings.json");
-        App.Trace("Backdrop set"); LoadSettings(); RefreshRecent(); Root.ActualThemeChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateCaption); App.Trace("Settings loaded");
+        App.Trace("Backdrop set"); LoadSettings(); InitializeEditorTools(); InitializePdfToolbar(); RefreshRecent(); Root.ActualThemeChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateCaption); App.Trace("Settings loaded");
         Preview.SourceRequested += async (page, x, y) => await InverseAsync(page, x, y);
         Preview.Error += message => SetStatus(message);
-        Preview.PageChanged += (page, count) => PageLabel.Text = $"{page} / {count}";
+        Preview.PageChanged += (_, _) => UpdatePdfToolbar();
+        Busy.RegisterPropertyChangedCallback(Microsoft.UI.Xaml.Controls.ProgressRing.IsActiveProperty, (_, _) => UpdateCompilePresentation());
         AppWindow.Closing += async (_, e) =>
         {
             if (_closing) return;
@@ -74,7 +76,7 @@ public sealed partial class MainWindow : Window
     }
     private void AddShortcut(VirtualKey key, VirtualKeyModifiers modifiers, Func<Task> action)
     { var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers }; accelerator.Invoked += async (_, e) => { e.Handled = true; try { await action(); } catch (Exception error) { SetStatus(error.Message); } }; Root.KeyboardAccelerators.Add(accelerator); }
-    private void SetStatus(string message) { Status.Text = message; }
+    private void SetStatus(string message) { Status.Text = message; UpdateCompilePresentation(); }
     private void InitializePicker(object picker) => WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
     private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await SafeAsync(PickFolderAsync);
     private async Task PickFolderAsync()
@@ -108,7 +110,7 @@ public sealed partial class MainWindow : Window
         if (_entry == null) { Busy.IsActive = false; SetStatus(UiText.T("文件夹中没有 .typ 文件，请新建文档。", "No .typ files in this folder. Create a document to begin.")); return; }
         _session = new(Path.Combine(AppContext.BaseDirectory, "tinymist.exe"), _root, _entry);
         var observedSession = _session;
-        _session.DiagnosticChanged += message => DispatcherQueue.TryEnqueue(() => { if (_session != observedSession) return; _diagnostics = message; if (SidebarPicker.SelectedIndex == 4) _ = RefreshSidebarAsync(); ProblemsButton.Content = UiText.Translate(string.IsNullOrWhiteSpace(message) ? "无问题" : "查看问题"); });
+        _session.DiagnosticChanged += message => DispatcherQueue.TryEnqueue(() => { if (_session != observedSession) return; _diagnostics = message; if (SidebarPicker.SelectedIndex == 4) _ = RefreshSidebarAsync(); UpdateCompilePresentation(); });
         _session.Failed += message => DispatcherQueue.TryEnqueue(() => SetStatus(UiText.T("编译服务已退出。请重新打开工程。 ", "The compiler stopped. Reopen the project. ") + message));
         await _session.InitializeAsync();
         await OpenBufferAsync(selected ?? _entry);
@@ -180,12 +182,11 @@ public sealed partial class MainWindow : Window
     {
         if (_settingText || _current == null) return;
         var text = EditorText(); if (text == _current.Text) return;
-        _current.Text = text; UpdateTitle(); ScheduleCompile(); if (SidebarPicker.SelectedIndex == 1) _ = RefreshSidebarAsync();
+        _current.Text = text; UpdateTitle(); UpdateEditorPosition(); ScheduleCompile(); if (SidebarPicker.SelectedIndex == 1) _ = RefreshSidebarAsync();
     }
     private void Editor_SelectionChanged(object sender, RoutedEventArgs e)
     {
-        if (_current == null) return; var position = EditorPosition();
-        PositionText.Text = UiText.English ? $"Ln {position.Line + 1}, Col {position.Column + 1}" : $"行 {position.Line + 1}，列 {position.Column + 1}";
+        UpdateEditorPosition();
     }
     private async void Editor_KeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -217,10 +218,11 @@ public sealed partial class MainWindow : Window
             if (_pdf == null || !pdf.AsSpan().SequenceEqual(_pdf)) await Preview.SetDocumentAsync(pdf);
             if (revision != _revision || session != _session) return;
             _compileError = ""; _pdf = pdf; _pdfRevision = revision; if (SidebarPicker.SelectedIndex is 2 or 4) _ = RefreshSidebarAsync(); PdfTitle.Text = "主文档 · " + Path.GetFileName(_entry);
-            SetStatus(UiText.English ? $"Compiled · {watch.Elapsed.TotalMilliseconds:F0} ms · Ctrl+click PDF to locate source" : $"编译完成 · {watch.Elapsed.TotalMilliseconds:F0} ms · Ctrl+单击 PDF 可跳转源码");
+            SetStatus(UiText.English ? $"Compiled · {watch.Elapsed.TotalMilliseconds:F0} ms" : $"编译完成 · {watch.Elapsed.TotalMilliseconds:F0} ms");
+            if (!_pdfHintShown) { SetStatus(Status.Text + UiText.T(" · Ctrl+单击 PDF 可定位源码", " · Ctrl+click PDF to locate source")); _pdfHintShown = true; SaveSettings(); }
         }
         catch (OperationCanceledException) { }
-        catch (Exception error) { if (revision == _revision) { _pdfRevision = -1; _compileError = error.Message; if (SidebarPicker.SelectedIndex == 4) _ = RefreshSidebarAsync(); ProblemsButton.Content = UiText.Translate("查看问题"); SetStatus(UiText.T("编译失败，请查看编译问题；保留上次预览。", "Compilation failed. See Problems; the previous preview is retained.")); } }
+        catch (Exception error) { if (revision == _revision) { _pdfRevision = -1; _compileError = error.Message; if (SidebarPicker.SelectedIndex == 4) _ = RefreshSidebarAsync(); UpdateCompilePresentation(); SetStatus(UiText.T("编译失败，请查看编译问题；保留上次预览。", "Compilation failed. See Problems; the previous preview is retained.")); } }
         finally { if (revision == _revision) { Busy.IsActive = false; if (SidebarPicker.SelectedIndex == 4) _ = RefreshSidebarAsync(); } }
     }
     private async Task ForwardAsync()
@@ -277,40 +279,12 @@ public sealed partial class MainWindow : Window
         var data = _pdf; var picker = new FileSavePicker { SuggestedFileName = Path.GetFileNameWithoutExtension(_entry) }; InitializePicker(picker); picker.FileTypeChoices.Add(UiText.T("PDF 文档", "PDF document"), new List<string> { ".pdf" });
         var file = await picker.PickSaveFileAsync(); if (file != null) { await File.WriteAllBytesAsync(file.Path, data); SetStatus(UiText.T("PDF 已导出。", "PDF exported.")); }
     });
-    private void BuildTree()
-    {
-        if (Files == null) return; Files.RootNodes.Clear(); if (_root == null) return;
-        var folders = new Dictionary<string, TreeViewNode>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in _sources.Where(p => p.Contains(FileFilter.Text ?? "", StringComparison.OrdinalIgnoreCase)))
-        {
-            var parts = Path.GetRelativePath(_root, file).Split(Path.DirectorySeparatorChar); var prefix = ""; TreeViewNode? parent = null;
-            foreach (var part in parts[..^1])
-            {
-                prefix = Path.Combine(prefix, part);
-                if (!folders.TryGetValue(prefix, out var node)) { node = new() { Content = new FileItem(part, null), IsExpanded = true }; folders[prefix] = node; if (parent == null) Files.RootNodes.Add(node); else parent.Children.Add(node); }
-                parent = node;
-            }
-            var leaf = new TreeViewNode { Content = new FileItem(parts[^1], file) }; if (parent == null) Files.RootNodes.Add(leaf); else parent.Children.Add(leaf);
-        }
-    }
-    [Microsoft.UI.Xaml.Data.Bindable]
-    public sealed record FileItem(string Name, string? Path) { public string Glyph => Path == null ? "\uE8B7" : "\uE8A5"; public override string ToString() => Name; }
-    private async void Files_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
-    { var item = args.InvokedItem is TreeViewNode node ? node.Content as FileItem : args.InvokedItem as FileItem; if (item?.Path != null) await SafeAsync(() => OpenBufferAsync(item.Path)); }
     private void FileFilter_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) { if (_sources != null) BuildTree(); }
-    private void ZoomOut_Click(object sender, RoutedEventArgs e) => Preview.Zoom(0.85);
-    private void ZoomIn_Click(object sender, RoutedEventArgs e) => Preview.Zoom(1.15);
+    private void ZoomOut_Click(object sender, RoutedEventArgs e) => Preview.SetZoomPercent(Preview.ZoomPercent * 0.85);
+    private void ZoomIn_Click(object sender, RoutedEventArgs e) => Preview.SetZoomPercent(Preview.ZoomPercent * 1.15);
     private void Fit_Click(object sender, RoutedEventArgs e) => Preview.FitWidth();
     private void Problems_Click(object sender, RoutedEventArgs e) { ShowPage(Workspace); SidebarPicker.SelectedIndex = 4; _ = RefreshSidebarAsync(); }
-    private async void Find_Click(object sender, RoutedEventArgs e)
-    {
-        var query = new TextBox { PlaceholderText = UiText.Translate("查找当前源码") };
-        var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, Title = "查找", Content = query, PrimaryButtonText = "查找", CloseButtonText = "取消" };
-        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary || _current == null || query.Text.Length == 0) return;
-        var start = Math.Min(SourceBuffer.Normalize(Editor.Text[..Math.Min(Editor.SelectionStart + Editor.SelectionLength, Editor.Text.Length)]).Length, _current.Text.Length); var index = _current.Text.IndexOf(query.Text, start, StringComparison.OrdinalIgnoreCase);
-        if (index < 0) index = _current.Text.IndexOf(query.Text, StringComparison.OrdinalIgnoreCase);
-        if (index >= 0) { SelectSource(index, query.Text.Length); } else SetStatus(UiText.T("没有找到匹配内容。", "No matching text found."));
-    }
+    private void Find_Click(object sender, RoutedEventArgs e) => ShowFind();
     private void ShowPage(FrameworkElement page)
     { Welcome.Visibility = page == Welcome ? Visibility.Visible : Visibility.Collapsed; Workspace.Visibility = page == Workspace ? Visibility.Visible : Visibility.Collapsed; SettingsPage.Visibility = page == SettingsPage ? Visibility.Visible : Visibility.Collapsed; SyncChrome(); }
     private void Home_Click(object sender, RoutedEventArgs e) { RefreshRecent(); ShowPage(Welcome); }
@@ -323,7 +297,7 @@ public sealed partial class MainWindow : Window
         if (result == ContentDialogResult.Primary) { try { foreach (var buffer in dirty) await buffer.SaveAsync(); } catch (Exception error) { SetStatus(error.Message); return false; } }
         return true;
     }
-    private Task ShowMessageAsync(string title, string content) => ShowDialogAsync(new ContentDialog { XamlRoot = Root.XamlRoot, Title = title, Content = new TextBox { Text = UiText.Translate(content), IsReadOnly = true, TextWrapping = TextWrapping.Wrap, MaxHeight = 420 }, CloseButtonText = "关闭" });
+    private Task ShowMessageAsync(string title, string content) => ShowDialogAsync(new ContentDialog { XamlRoot = Root.XamlRoot, Title = title, Content = new TextBox { Text = UiText.Translate(content), IsReadOnly = true, TextWrapping = TextWrapping.Wrap, MaxHeight = Ui.D("DialogMaxHeight") }, CloseButtonText = "关闭" });
     private async Task<ContentDialogResult> ShowDialogAsync(ContentDialog dialog)
     {
         if (_activeDialog != null) return ContentDialogResult.None;
