@@ -27,7 +27,7 @@ Windows原来已固定工程入口，新增显式当前文件编译。Tinymist p
 | CT05 | Windows native smoke加入连续编译不同入口断言；后台串行pinMain/preview切换，旧请求不能发布。最终Release两架构隔离安装与原生回归均通过，见evidence/installed-*.json。 |
 | CT06 | Mac全量回归通过失败旧预览/缓存失效；Windows新增显式失败保留旧PDF且pdfRevision失效断言。错误通知晚到时问题列表先显示导出错误正文，不猜测行号。 |
 | CT07 | Mac全量scripts/test.sh通过；原生Mac工具栏可访问且实际点击通过。Windows Debug x64与Release ARM64/x64通过；最终安装后原生回归均通过。 |
-| CT08 | Mac arm64应用/DMG/签名已生成，Ed25519验证通过；Windows安装包已生成，两架构安装后回归通过，发布与远程校验待完成。 |
+| CT08 | Mac arm64应用/DMG/签名已生成，Ed25519验证通过；Windows安装包已生成，两架构安装后回归通过，两个公开Release均已发布，全部对应资源SHA256与本地一致；Mac update.json已在本地重新下载验证DMG与Ed25519签名后发布。 |
 
 ## 环境与限制
 
@@ -41,3 +41,12 @@ Mac暂存到Documents目录时出现Finder元数据导致codesign拒绝；改在
 - Windows核心测试见evidence/windows-core.log；安装后测试见evidence/installed-arm64.json和installed-x64.json。ARM首次启动没有产出报告，单独启动重跑后得到success=true；x64首轮安装后报告成功。
 - Mac DMG只读挂载后codesign --verify --deep --strict通过，主程序arm64、内置Tinymist版本与既有0.15.10补丁一致，DMG的Sparkle Ed25519签名通过OpenSSL3公钥验证。
 - 公开仓库已有自动发布清单工作流已按“不用GitHub Actions”要求设为disabled_manually。复用经过检查的清单脚本在本地执行；私有仓库没有工作流。
+
+## 发布结果
+
+实现提交6cca4c8；源码已推送私人仓库。
+
+- https://github.com/liaoweiyang2017/typst-studio-releases/releases/tag/v0.2.1
+- https://github.com/liaoweiyang2017/typst-studio-releases/releases/tag/windows-v0.2.1
+
+公开latest指向Mac v0.2.1，Sparkle appcast更新地址保持兼容。发布后检查Actions列表，没有本次发布产生的运行。现有工作流保持disabled_manually，后续同样使用本地发布脚本。
