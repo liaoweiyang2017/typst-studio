@@ -65,7 +65,7 @@ struct SourceEditor: NSViewRepresentable {
     @ObservedObject var model: StudioModel
     func makeCoordinator() -> Coordinator { Coordinator(model) }
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView(); scroll.hasVerticalScroller = true; scroll.hasHorizontalScroller = false; scroll.autohidesScrollers = true
+        let scroll = NSScrollView(); scroll.borderType = .noBorder; scroll.wantsLayer = true; scroll.layer?.masksToBounds = true; scroll.hasVerticalScroller = true; scroll.hasHorizontalScroller = false; scroll.autohidesScrollers = true
         let text = CodeTextView(frame: NSRect(x: 0, y: 0, width: 500, height: 600))
         text.isRichText = false; text.allowsUndo = true; text.isAutomaticQuoteSubstitutionEnabled = false
         text.isAutomaticDashSubstitutionEnabled = false; text.isAutomaticTextReplacementEnabled = false

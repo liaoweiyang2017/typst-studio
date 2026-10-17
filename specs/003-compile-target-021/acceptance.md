@@ -50,3 +50,9 @@ Mac暂存到Documents目录时出现Finder元数据导致codesign拒绝；改在
 - https://github.com/liaoweiyang2017/typst-studio-releases/releases/tag/windows-v0.2.1
 
 公开latest指向Mac v0.2.1，Sparkle appcast更新地址保持兼容。发布后检查Actions列表，没有本次发布产生的运行。现有工作流保持disabled_manually，后续同样使用本地发布脚本。
+
+## Mac build 11 布局修订
+
+按用户截图反馈，将编译移到源码标题行，文件名左对齐，原生小尺寸按钮右对齐，进度与未保存标记留在同一行。窗口principal显示工程名，恢复侧栏开关左/问题与预览右的原生toolbar分组。源码NSScrollView显式无边框并裁切，防止行号标尺分隔线绘制到标题行。
+
+原生窗口截图已确认顶部按钮左右归位、文件名后的多余竖线消失；中文编译按钮实际点击可用。重新编译EditorResponsiveness测试通过编辑器/PDF等宽及主线程响应。版本仍0.2.1，Mac CFBundleVersion递增为11。Windows产物保持原样。

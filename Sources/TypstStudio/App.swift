@@ -83,13 +83,10 @@ struct StudioView: View {
         .toolbar {
             ToolbarItem(placement: .navigation) { Button { model.sidebar.toggle() } label: { Image(systemName: "sidebar.left") }.help(model.tr("Toggle sidebar")) }
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 7) { Text(model.title).font(.system(size: 13, weight: .semibold)); if model.dirty { Circle().fill(.secondary).frame(width: 5, height: 5) } }
+                Text(model.projectURL?.lastPathComponent ?? "Typst Studio").font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                    .help(model.projectURL?.path ?? "Typst Studio")
             }
             ToolbarItemGroup(placement: .primaryAction) {
-                Button { model.compile() } label: { Label(model.tr("Compile"), systemImage: "play.fill") }
-                    .help(model.compileButtonHelp).disabled(model.compiling)
-                if model.compiling { ProgressView().controlSize(.small).help(model.tr("Compiling…")) }
-
                 Button { section = 4; model.sidebar = true; model.showDiagnostics.toggle() } label: { Image(systemName: model.diagnostics.isEmpty ? "exclamationmark.triangle.fill" : "exclamationmark.triangle.fill").foregroundStyle(model.diagnostics.isEmpty ? Color.secondary : .orange) }.help(model.status)
                 Button { previewVisible.toggle() } label: { Image(systemName: "rectangle.on.rectangle").foregroundStyle(previewVisible ? Color.blue : .secondary) }.help(model.tr("Toggle PDF preview"))
             }
@@ -107,7 +104,16 @@ struct StudioView: View {
     }
     var editorPane: some View {
             VStack(spacing: 0) {
-                SourceEditor(model: model)
+                HStack(spacing: 8) {
+                    Text(model.title).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+                    if model.dirty { Circle().fill(.secondary).frame(width: 4, height: 4) }
+                    Spacer(minLength: 12)
+                    if model.compiling { ProgressView().controlSize(.mini).help(model.tr("Compiling…")) }
+                    Button { model.compile() } label: { Label(model.tr("Compile"), systemImage: "play.fill").labelStyle(.titleAndIcon) }
+                        .buttonStyle(.bordered).controlSize(.small).help(model.compileButtonHelp).disabled(model.compiling)
+                }.padding(.horizontal, 12).frame(height: 36).background(Color(nsColor: .windowBackgroundColor))
+                Divider()
+                SourceEditor(model: model).clipped()
                 if model.showDiagnostics && !model.diagnostics.isEmpty {
                     Divider()
                     HStack(alignment: .top) {
@@ -128,7 +134,6 @@ struct StudioView: View {
                     Button { model.insert("\n+ ") } label: { Image(systemName: "list.number") }.help("Numbered list")
                     Button { model.showSymbols = true } label: { Image(systemName: "sum") }.help(model.tr("Symbols"))
                     Spacer()
-                    if model.compiling { ProgressView().controlSize(.mini) }
                     Text("\(model.text.split { $0.isWhitespace || $0.isNewline }.count) words").foregroundStyle(.secondary)
                 }.font(.system(size: 11)).buttonStyle(.borderless).padding(.horizontal, 14).frame(height: 27).background(Color(nsColor: .textBackgroundColor))
             }
