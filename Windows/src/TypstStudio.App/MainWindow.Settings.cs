@@ -79,6 +79,7 @@ public sealed partial class MainWindow
     {
         var dark = Root.ActualTheme == ElementTheme.Dark; int enabled = dark ? 1 : 0;
         DwmSetWindowAttribute(WinRT.Interop.WindowNative.GetWindowHandle(this), 20, ref enabled, sizeof(int));
+        SyncCaptionColors();
 
     }
     private void Undo_Click(object sender, RoutedEventArgs e) => Editor.Undo();

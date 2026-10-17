@@ -41,7 +41,7 @@ public sealed partial class MainWindow : Window
         AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(work.X + (work.Width - width) / 2, work.Y + (work.Height - height) / 2, width, height));
         if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter) { presenter.PreferredMinimumWidth = Math.Min((int)(880 * dpi), width); presenter.PreferredMinimumHeight = Math.Min((int)(500 * dpi), height); }
         App.Trace("Window resized"); AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Studio.ico"));
-        App.Trace("Icon loaded"); SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
+        App.Trace("Icon loaded"); ConfigureChrome();
         if (_args.Contains("--smoke")) _settingsPath = Path.Combine(Path.GetTempPath(), "TypstStudio-Smoke-" + Environment.ProcessId, "settings.json");
         App.Trace("Backdrop set"); LoadSettings(); RefreshRecent(); Root.ActualThemeChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateCaption); App.Trace("Settings loaded");
         Preview.SourceRequested += async (page, x, y) => await InverseAsync(page, x, y);
@@ -191,7 +191,7 @@ public sealed partial class MainWindow : Window
 
     }
 
-    private void UpdateTitle() { EditorTitle.Text = _current == null ? UiText.Translate("尚未打开文档") : Path.GetFileName(_current.Path) + (_current.Dirty ? " ●" : ""); Title = EditorTitle.Text + " — Typst Studio"; }
+    private void UpdateTitle() { EditorTitle.Text = _current == null ? UiText.Translate("尚未打开文档") : Path.GetFileName(_current.Path) + (_current.Dirty ? " ●" : ""); Title = EditorTitle.Text + " — Typst Studio"; TitleFileName.Text = EditorTitle.Text; }
     private async void ScheduleCompile(int delay = -1)
     {
         _revision++; _pdfRevision = -1; _navigation.Cancel();
@@ -308,7 +308,7 @@ public sealed partial class MainWindow : Window
         if (index >= 0) { SelectSource(index, query.Text.Length); } else SetStatus(UiText.T("没有找到匹配内容。", "No matching text found."));
     }
     private void ShowPage(FrameworkElement page)
-    { Welcome.Visibility = page == Welcome ? Visibility.Visible : Visibility.Collapsed; Workspace.Visibility = page == Workspace ? Visibility.Visible : Visibility.Collapsed; SettingsPage.Visibility = page == SettingsPage ? Visibility.Visible : Visibility.Collapsed; }
+    { Welcome.Visibility = page == Welcome ? Visibility.Visible : Visibility.Collapsed; Workspace.Visibility = page == Workspace ? Visibility.Visible : Visibility.Collapsed; SettingsPage.Visibility = page == SettingsPage ? Visibility.Visible : Visibility.Collapsed; SyncChrome(); }
     private void Home_Click(object sender, RoutedEventArgs e) { RefreshRecent(); ShowPage(Welcome); }
     private void Back_Click(object sender, RoutedEventArgs e) => ShowPage(_root == null ? Welcome : Workspace);
     private void RefreshRecent()
