@@ -46,6 +46,8 @@ public sealed partial class MainWindow
     {
         TitleFileName.Visibility = Workspace.Visibility == Visibility.Visible && _current != null ? Visibility.Visible : Visibility.Collapsed;
         RestoreSidebarButton.Visibility = Workspace.Visibility == Visibility.Visible && _sidebarHidden ? Visibility.Visible : Visibility.Collapsed;
+        ProblemsButton.Visibility = Workspace.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+        StatusArea.BorderThickness = Workspace.Visibility == Visibility.Visible ? Ui.Pad("ThinTop") : Ui.Pad("Zero");
         UpdateTitleBarRegions();
     }
     private void ToggleSidebar_Click(object sender, RoutedEventArgs e)

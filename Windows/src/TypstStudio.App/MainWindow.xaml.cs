@@ -65,6 +65,8 @@ public sealed partial class MainWindow : Window
         };
         Root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(CommentKeyDown), true);
         AddShortcut(VirtualKey.O, VirtualKeyModifiers.Control, async () => await PickFolderAsync());
+        AddShortcut(VirtualKey.O, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, PickFileAsync);
+        AddShortcut(VirtualKey.N, VirtualKeyModifiers.Control, CreateFromTemplateAsync);
         AddShortcut(VirtualKey.S, VirtualKeyModifiers.Control, async () => await SaveCurrentAsync());
         AddShortcut(VirtualKey.B, VirtualKeyModifiers.Control, async () => await CompileNowAsync());
         AddShortcut(VirtualKey.J, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, async () => await ForwardAsync());
@@ -77,9 +79,11 @@ public sealed partial class MainWindow : Window
     private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await SafeAsync(PickFolderAsync);
     private async Task PickFolderAsync()
     { var picker = new FolderPicker(); InitializePicker(picker); picker.FileTypeFilter.Add("*"); var folder = await picker.PickSingleFolderAsync(); if (folder != null) await OpenProjectAsync(folder.Path); }
-    private async void OpenFile_Click(object sender, RoutedEventArgs e) => await SafeAsync(async () =>
-    { var picker = new FileOpenPicker(); InitializePicker(picker); picker.FileTypeFilter.Add(".typ"); var file = await picker.PickSingleFileAsync(); if (file != null) await OpenProjectAsync(Path.GetDirectoryName(file.Path)!, file.Path); });
-    private async void New_Click(object sender, RoutedEventArgs e) => await SafeAsync(async () =>
+    private async void OpenFile_Click(object sender, RoutedEventArgs e) => await SafeAsync(PickFileAsync);
+    private async Task PickFileAsync()
+    { var picker = new FileOpenPicker(); InitializePicker(picker); picker.FileTypeFilter.Add(".typ"); var file = await picker.PickSingleFileAsync(); if (file != null) await OpenProjectAsync(Path.GetDirectoryName(file.Path)!, file.Path); }
+    private async void New_Click(object sender, RoutedEventArgs e) => await SafeAsync(CreateFromTemplateAsync);
+    private async Task CreateFromTemplateAsync()
     {
         if (!await ConfirmUnsavedAsync()) return;
         var templates = new ComboBox { ItemsSource = new[] { UiText.T("文章", "Article"), UiText.T("空白文档", "Blank"), UiText.T("数学笔记", "Math notes") }, SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -88,7 +92,7 @@ public sealed partial class MainWindow : Window
         var file = await picker.PickSaveFileAsync(); if (file == null) return;
         await File.WriteAllTextAsync(file.Path, templates.SelectedIndex == 1 ? "" : "= 新文档\n\n开始编写内容。\n\n$ integral_0^1 x^2 dif x = 1/3 $\n");
         await OpenProjectAsync(Path.GetDirectoryName(file.Path)!, file.Path, confirmed: true);
-    });
+    }
     private async Task OpenProjectAsync(string root, string? selected = null, bool confirmed = false)
     {
         if (_opening) return;
@@ -191,7 +195,7 @@ public sealed partial class MainWindow : Window
 
     }
 
-    private void UpdateTitle() { EditorTitle.Text = _current == null ? UiText.Translate("尚未打开文档") : Path.GetFileName(_current.Path) + (_current.Dirty ? " ●" : ""); Title = EditorTitle.Text + " — Typst Studio"; TitleFileName.Text = EditorTitle.Text; }
+    private void UpdateTitle() { EditorTitle.Text = _current == null ? UiText.Translate("尚未打开文档") : Path.GetFileName(_current.Path) + (_current.Dirty ? " ●" : ""); Title = EditorTitle.Text + " — Typst Studio"; TitleFileName.Text = EditorTitle.Text; SyncChrome(); }
     private async void ScheduleCompile(int delay = -1)
     {
         _revision++; _pdfRevision = -1; _navigation.Cancel();
@@ -311,18 +315,6 @@ public sealed partial class MainWindow : Window
     { Welcome.Visibility = page == Welcome ? Visibility.Visible : Visibility.Collapsed; Workspace.Visibility = page == Workspace ? Visibility.Visible : Visibility.Collapsed; SettingsPage.Visibility = page == SettingsPage ? Visibility.Visible : Visibility.Collapsed; SyncChrome(); }
     private void Home_Click(object sender, RoutedEventArgs e) { RefreshRecent(); ShowPage(Welcome); }
     private void Back_Click(object sender, RoutedEventArgs e) => ShowPage(_root == null ? Welcome : Workspace);
-    private void RefreshRecent()
-    {
-        RecentProjects.Children.Clear();
-        if (_recent.Count == 0) RecentProjects.Children.Add(new TextBlock { Text = UiText.T("暂无最近工程", "No recent projects"), Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], Margin = new Thickness(0, 24, 0, 0) });
-        foreach (var path in _recent)
-        {
-            var text = new StackPanel { Spacing = 4 }; text.Children.Add(new TextBlock { Text = Path.GetFileName(path), FontSize = 18, TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }); text.Children.Add(new TextBlock { Text = path, FontSize = 12, TextWrapping = TextWrapping.Wrap, Opacity = 0.65 });
-            var row = new Grid { ColumnSpacing = 16 }; row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); row.Children.Add(new SymbolIcon(Symbol.Folder)); Grid.SetColumn(text, 1); row.Children.Add(text);
-            var button = new Button { Content = row, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(16) };
-            button.Click += async (_, _) => { button.IsEnabled = false; SetStatus(UiText.T("正在打开 ", "Opening ") + Path.GetFileName(path) + "…"); try { await SafeAsync(() => OpenProjectAsync(path)); } finally { button.IsEnabled = true; } }; RecentProjects.Children.Add(button);
-        }
-    }
     private async Task<bool> ConfirmUnsavedAsync()
     {
         var dirty = _buffers.Values.Where(b => b.Dirty).ToArray(); if (dirty.Length == 0) return true;
