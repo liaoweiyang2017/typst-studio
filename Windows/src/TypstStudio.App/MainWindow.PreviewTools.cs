@@ -15,15 +15,16 @@ public sealed partial class MainWindow
     {
         _updatingZoom = true;
         PdfLeftActions.Children.Clear(); PdfRightActions.Children.Clear(); _expandedPdfButtons.Clear();
-        _zoomInput.Width = Ui.D("ScaleBoxWidth"); _zoomInput.Height = Ui.D("ControlHeightStandard"); _zoomInput.FontSize = Ui.D("FontBody");
+        _zoomInput.Width = _zoomInput.MinWidth = Ui.D("ScaleBoxWidth"); _zoomInput.Padding = Ui.Pad("Pad4"); _zoomInput.Height = Ui.D("ControlHeightStandard"); _zoomInput.FontSize = Ui.D("FontCaption");
+        _zoomInput.Resources["ComboBoxEditableTextPadding"] = Ui.Pad("ZoomTextPadding");
         _zoomInput.ItemsSource = new[] { "50%", "75%", "100%", "125%", "150%", "200%", T("适合宽度", "Fit width"), T("整页", "Fit page") };
         Ui.Describe(_zoomInput, T("PDF 缩放比例", "PDF zoom"));
         PdfLeftActions.Children.Add(Ui.IconButton("\uE71F", T("缩小", "Zoom out"), ZoomOut_Click)); PdfLeftActions.Children.Add(_zoomInput);
         PdfLeftActions.Children.Add(Ui.IconButton("\uE8A3", T("放大", "Zoom in"), ZoomIn_Click));
         void Expanded(StackPanel panel, string glyph, string title, RoutedEventHandler action) { var b = Ui.IconButton(glyph, title, action); _expandedPdfButtons.Add(b); panel.Children.Add(b); }
-        Expanded(PdfLeftActions, "\uE9A6", T("适合宽度", "Fit width"), Fit_Click); Expanded(PdfLeftActions, "\uE9A9", T("整页", "Fit page"), FitPage_Click);
+        Expanded(PdfLeftActions, "\uE7FD", T("适合宽度", "Fit width"), Fit_Click); Expanded(PdfLeftActions, "\uE9A6", T("整页", "Fit page"), FitPage_Click);
         Expanded(PdfRightActions, "\uE70E", T("上一页", "Previous page"), PreviousPage_Click); Expanded(PdfRightActions, "\uE70D", T("下一页", "Next page"), NextPage_Click);
-        Expanded(PdfRightActions, "\uE8A7", T("定位到源码 (Ctrl+Alt+J)", "Go to source (Ctrl+Alt+J)"), (_, _) => NavigatePreviewSelection());
+        Expanded(PdfRightActions, "\uE72B", T("定位到源码 (Ctrl+Alt+J)", "Go to source (Ctrl+Alt+J)"), (_, _) => NavigatePreviewSelection());
         PdfRightActions.Children.Add(Ui.IconButton("\uE712", T("更多 PDF 操作", "More PDF actions"), PdfMore_Click));
         _updatingZoom = false;
         if (_previewEventsInitialized) { UpdatePdfToolbar(); return; } _previewEventsInitialized = true;
@@ -49,7 +50,7 @@ public sealed partial class MainWindow
     {
         if (Preview.PageCount == 0) return;
         var box = new NumberBox { Minimum = 1, Maximum = Preview.PageCount, Value = Math.Max(1, Preview.CurrentPage), SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
-        if (await ShowDialogAsync(new ContentDialog { XamlRoot = Root.XamlRoot, Title = T("跳转到页", "Go to page"), Content = box, PrimaryButtonText = T("跳转", "Go"), CloseButtonText = T("取消", "Cancel") }) == ContentDialogResult.Primary && double.IsFinite(box.Value) && box.Value >= 1 && box.Value <= Preview.PageCount) Preview.GoTo(new((int)box.Value, 0, 0));
+        if (await ShowDialogAsync(new ContentDialog { XamlRoot = Root.XamlRoot, Title = T("跳转到页", "Go to page"), Content = box, PrimaryButtonText = T("跳转", "Go"), CloseButtonText = T("取消", "Cancel") }) == ContentDialogResult.Primary && double.IsFinite(box.Value) && box.Value >= 1 && box.Value <= Preview.PageCount) Preview.MovePage((int)box.Value - Preview.CurrentPage);
     }
     private void NavigatePreviewSelection() { if (!Preview.NavigateSelection()) SetStatus(T("先选择 PDF 文字，或 Ctrl+单击公式。", "Select PDF text or Ctrl+click a formula.")); }
     private void PdfMore_Click(object sender, RoutedEventArgs e)
@@ -69,10 +70,9 @@ public sealed partial class MainWindow
     private void StatusButton_Click(object sender, RoutedEventArgs e) { if (_compileError.Length > 0 || (_session?.Problems.Count ?? 0) > 0) Problems_Click(sender, e); }
     private void UpdateCompilePresentation()
     {
-        var count = _session?.Problems.Count ?? 0; SidebarPicker.SetProblemCount(count); StatusProblemBadge.Value = count; StatusProblemBadge.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var count = _session?.Problems.Count ?? 0; SidebarPicker.SetProblemCount(count);
         var failed = _compileError.Length > 0 || _session?.Problems.Any(p => p.Severity == 1) == true;
         CompileStateIcon.Glyph = failed ? "\uE783" : "\uE73E"; CompileStateIcon.Visibility = Busy.IsActive || _pdf == null && !failed ? Visibility.Collapsed : Visibility.Visible;
         CompileStateIcon.Foreground = Ui.Brush(Root, failed ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush");
-        Ui.Describe(ProblemsButton, T($"编译问题（{count}）", $"Problems ({count})"));
     }
 }

@@ -80,7 +80,7 @@ public sealed partial class SourceEditor : UserControl
         var y = Native.PointYFromPosition(Native.PositionFromLine(line)) / scale;
         ActiveLineNumberHost.Visibility = y >= 0 && y < ActualHeight ? Visibility.Visible : Visibility.Collapsed;
         ActiveLineNumberHost.Margin = new Thickness(0, Math.Max(0, y), 0, 0); // Native document geometry, not UI spacing.
-        ActiveLineNumberHost.Width = Ui.D("EditorGutterWidth"); ActiveLineNumber.Text = (line + 1).ToString();
+        ActiveLineNumberHost.Width = Ui.D("EditorGutterWidth"); ActiveLineNumberHost.Height = Native.TextHeight(line) / scale; ActiveLineNumber.Text = (line + 1).ToString();
     }
     private void Highlight()
     {

@@ -26,7 +26,7 @@ Windows/src/TypstStudio.Core 的 TinymistSession、LspConnection、PdfDocument�
 
 1. 资源字典合并并统一C#动态UI样式读取，处理主题变化；图标和布局尺寸都使用资源。资源合规扫描检查XAML与动态UI，不用简单字符串搜索误报ThemeResource表达式。
 2. 扩展标题栏，菜单Passthrough区域与空白拖动区域分别设置，跟踪SizeChanged/DPI/RightInset。保留原生caption按钮，不手绘红绿灯。
-3. 欢迎页使用受约束Grid和ListView，右列360；VisualStateManager在1040DIP切换布局。去掉双重菜单和额外ScrollViewer。
+3. 欢迎页使用受约束Grid和ListView，右列360；按Root实际DIP宽度在1040切换布局（原生回归发现Window内AdaptiveTrigger未稳定触发，改为单一SizeChanged布局适配）。去掉双重菜单和额外ScrollViewer。
 4. SelectorBar优先，必要时仅因已证实API/布局限制使用原生ToggleButton分段替代并记录证据。面板本体持续保留。
 5. 查找浮层使用现有编辑器选区/替换适配，格式命令使用原生undo分组；新建目录/文件通过用户确认的位置和防覆盖检查。
 6. PDF新增只读展示属性/交互适配，复用Zoom/FitWidth/FitPage/GoTo/NavigateSelection；纸张边距和命中测试共享同一布局参数，不改坐标映射算法。外部打开不修改源PDF。
@@ -45,3 +45,5 @@ Windows/src/TypstStudio.Core 的 TinymistSession、LspConnection、PdfDocument�
 ## 风险和验证
 
 标题栏交互区域、Scintilla主题色、PDF纸张边距对应的点击坐标、最小尺寸下工具栏溢出是重点。每阶段记录Debug x64命令与结果；最后跑实际编译器/PDF/源码映射和原生窗口回归。100/125/150%视觉结果逐项记录，未实测的比例不能标为通过。x64在ARM虚拟机运行需明确限制。
+
+补充：ComboBox的编辑态内边距依照 microsoft/microsoft-ui-xaml/controls/dev/ComboBox/ComboBox_themeresources.xaml 的 ComboBoxEditableTextPadding 资源局部覆盖，避免复制系统控件模板。

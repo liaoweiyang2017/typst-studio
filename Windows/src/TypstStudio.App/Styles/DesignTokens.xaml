@@ -100,4 +100,8 @@
  <FontFamily x:Key="StudioMathFont">Cambria Math</FontFamily>
  <Style TargetType="TextBlock" BasedOn="{StaticResource StudioBody}"/>
  <Style TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}"><Setter Property="FontSize" Value="{ThemeResource FontBody}"/><Setter Property="FontFamily" Value="{ThemeResource StudioUIFont}"/><Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}"/></Style>
+ <Thickness x:Key="ZoomTextPadding">4,4,28,4</Thickness>
+ <x:Double x:Key="FormatButtonSize">28</x:Double>
+ <x:Double x:Key="RecentPathMaxWidth">260</x:Double>
+ <x:Double x:Key="ToggleMinWidth">100</x:Double>
 </ResourceDictionary>

@@ -31,7 +31,7 @@ public sealed partial class MainWindow
         ComboBox Choice(string[] values, int selected, Action<int> change)
         { var box = new ComboBox { Width = Ui.D("SettingsControlWidth"), ItemsSource = values, SelectedIndex = selected }; box.SelectionChanged += (_, _) => change(box.SelectedIndex); return box; }
         ToggleSwitch Toggle(bool value, Action<bool> change)
-        { var toggle = new ToggleSwitch { IsOn = value, OnContent = T("开启", "On"), OffContent = T("关闭", "Off"), MinWidth = 100 }; toggle.Toggled += (_, _) => change(toggle.IsOn); return toggle; }
+        { var toggle = new ToggleSwitch { IsOn = value, OnContent = T("开启", "On"), OffContent = T("关闭", "Off"), MinWidth = Ui.D("ToggleMinWidth") }; toggle.Toggled += (_, _) => change(toggle.IsOn); return toggle; }
         Heading(T("个性化", "Personalization"));
         Row(Symbol.World, T("界面语言", "Language"), T("选择中英文界面，更改立即生效。", "Changes apply immediately."), Choice([T("跟随系统", "Use system setting"), "English", "简体中文"], _language == "en" ? 1 : _language == "zh" ? 2 : 0, i => { _language = i == 1 ? "en" : i == 2 ? "zh" : "System"; ApplyLanguage(); SaveSettings(); DispatcherQueue.TryEnqueue(() => Settings_Click(this, new RoutedEventArgs())); }));
         Row(Symbol.Setting, T("应用主题", "Application theme"), T("标题栏、菜单与工作区保持一致。", "Applies to title bar, menus, and workspace."), Choice([T("跟随系统", "Use system setting"), T("浅色", "Light"), T("深色", "Dark")], _theme == "Light" ? 1 : _theme == "Dark" ? 2 : 0, i => { _theme = i == 1 ? "Light" : i == 2 ? "Dark" : "Default"; Root.RequestedTheme = Enum.Parse<ElementTheme>(_theme); UpdateCaption(); SaveSettings(); }));
@@ -49,12 +49,16 @@ public sealed partial class MainWindow
         var reset = new Button { Content = T("恢复均分", "Equal widths"), Width = Ui.D("SettingsControlWidth") }; reset.Click += ResetSplit_Click;
         Row(Symbol.TwoPage, T("源码与 PDF 分栏", "Editor / PDF split"), T("拖动中间分隔线调整宽度，自动记住比例。", "Drag the divider; the ratio is remembered."), reset);
         Row(Symbol.Find, T("双向定位", "Source mapping"), T("源码 Ctrl+Shift+J；PDF 中 Ctrl+单击公式或选中文字后 Ctrl+Alt+J。", "Source: Ctrl+Shift+J. PDF: Ctrl+click, or select text and press Ctrl+Alt+J."));
-        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.1.9", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
+        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.2.0", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
         ShowPage(SettingsPage);
     }
     private void ApplyLanguage()
     {
         UiText.English = _language == "en" || (_language == "System" && !System.Globalization.CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase));
+        Ui.Describe(WelcomeFolderButton, T("打开文件夹… (Ctrl+O)", "Open Folder… (Ctrl+O)"));
+        Ui.Describe(WelcomeFileButton, T("打开文件… (Ctrl+Shift+O)", "Open File… (Ctrl+Shift+O)"));
+        Ui.Describe(WelcomeTemplateButton, T("从模板新建工程… (Ctrl+N)", "New Project from Template… (Ctrl+N)"));
+        Ui.Describe(RestoreSidebarButton, T("显示侧边栏 (Ctrl+Shift+B)", "Show sidebar (Ctrl+Shift+B)"));
         UiText.Apply(Root); UiText.Apply(MainMenu); RefreshSidebarLabels(); InitializeEditorTools(); InitializePdfToolbar(); RefreshRecent(); UpdateTitle(); Editor_SelectionChanged(this, new RoutedEventArgs()); SetStatus(T("就绪。", "Ready."));
     }
     private void SetCommentShortcut()
@@ -109,7 +113,7 @@ public sealed partial class MainWindow
             _language = Str("language", "System"); _commentShortcut = Str("commentShortcut", "Ctrl+/"); _pdfMode = Str("pdfMode", "Standard");
             Root.RequestedTheme = Enum.Parse<ElementTheme>(_theme); Editor.FontSize = Math.Clamp(Num("fontSize", 14), 11, 24); Editor.ShowLineNumbers = Flag("lineNumbers", true); Editor.WordWrap = Num("uiLayoutVersion", 0) < 2 || Flag("wordWrap", true);
             _pdfHintShown = Flag("pdfHintShown", false); _autoCompile = Flag("autoCompile", true); _compileDelay = (int)Math.Clamp(Num("compileDelay", 160), 100, 1000); _editorRatio = Math.Clamp(Num("editorRatio", 0.5), 0.2, 0.8); SidebarColumn.Width = new GridLength(Math.Clamp(Num("uiLayoutVersion", 0) < 2 ? Ui.D("SidebarDefaultWidth") : Num("sidebarWidth", Ui.D("SidebarDefaultWidth")), Ui.D("SidebarMinWidth"), Ui.D("SidebarMaxWidth")));
-            if (s.TryGetProperty("recent", out var recent)) _recent.AddRange(recent.EnumerateArray().Select(p => p.GetString()!).Where(Directory.Exists).Take(10));
+            if (s.TryGetProperty("recent", out var recent)) { _recent.Clear(); _recent.AddRange(recent.EnumerateArray().Select(p => p.GetString()!).Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).Take(10)); }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or ArgumentException or InvalidOperationException) { }
         var initial = Array.IndexOf(_args, "--initial-language"); if (!File.Exists(_settingsPath) && initial >= 0 && initial + 1 < _args.Length) _language = _args[initial + 1] == "zh" ? "zh" : "en";

@@ -323,7 +323,10 @@ public sealed partial class MainWindow : Window
     private async Task CaptureAsync(string path)
     {
             Root.UpdateLayout(); await Task.Delay(100);
-            var bitmap = new Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap(); await bitmap.RenderAsync(Root);
+            var backdrop = Root.Background;
+            Root.Background = Ui.Brush(Root, "SolidBackgroundFillColorBaseBrush");
+            var bitmap = new Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap();
+            try { await bitmap.RenderAsync(Root); } finally { Root.Background = backdrop; }
             var pixels = await bitmap.GetPixelsAsync();
             using (var stream = File.OpenWrite(path))
             {
@@ -356,7 +359,18 @@ public sealed partial class MainWindow : Window
             if (!Editor.Text.StartsWith("//")) throw new InvalidOperationException("Line comment was not inserted");
             Editor.Undo(); await WaitForCompileAsync(previous);
             if (Editor.Text != previous) throw new InvalidOperationException("Comment must undo in one action");
+            await VerifyEditorCommandsAsync();
             Editor.ShowLineNumbers = false; Editor.ShowLineNumbers = true;
+            var sidebarWidth = SidebarColumn.ActualWidth;
+            ToggleSidebar_Click(this, new RoutedEventArgs()); Root.UpdateLayout();
+            if (SidebarColumn.ActualWidth != 0 || RestoreSidebarButton.Visibility != Visibility.Visible) throw new InvalidOperationException("Sidebar did not hide");
+            ToggleSidebar_Click(this, new RoutedEventArgs()); Root.UpdateLayout();
+            if (Math.Abs(SidebarColumn.ActualWidth - sidebarWidth) > 1) throw new InvalidOperationException("Sidebar width was not restored");
+            Preview.SetZoomPercent(125); Root.UpdateLayout();
+            if (Math.Abs(Preview.ZoomPercent - 125) > 1) throw new InvalidOperationException("PDF percentage zoom failed");
+            Preview.MovePage(Preview.PageCount - Preview.CurrentPage); await Task.Delay(80);
+            if (Preview.CurrentPage != Preview.PageCount) throw new InvalidOperationException("PDF page jump failed");
+            Preview.FitWidth();
             _editorRatio = 0.6; ApplySplit(); Root.UpdateLayout();
             if (EditorColumn.ActualWidth <= PreviewColumn.ActualWidth) throw new InvalidOperationException("Split ratio did not resize panes");
             ResetSplit_Click(this, new RoutedEventArgs());
@@ -368,12 +382,17 @@ public sealed partial class MainWindow : Window
             _language = "en"; ApplyLanguage(); _theme = "Light"; Root.RequestedTheme = ElementTheme.Light; UpdateCaption(); Settings_Click(this, new RoutedEventArgs()); await Task.Delay(150);
             if (MainMenu.Items[0].Title != "File" || !SettingsContent.Children.OfType<TextBlock>().Any(t => t.Text == "Settings")) throw new InvalidOperationException("English UI did not apply");
             await CaptureAsync(Path.Combine(root, "settings-light-en.png"));
-            var scale = Root.XamlRoot.RasterizationScale; AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(900 * scale), (int)(650 * scale))); await Task.Delay(150);
+            var scale = Root.XamlRoot.RasterizationScale; AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(960 * scale), (int)(650 * scale))); await Task.Delay(150);
             var narrow = SettingsContent.TransformToVisual(Root).TransformBounds(new Windows.Foundation.Rect(0, 0, SettingsContent.ActualWidth, SettingsContent.ActualHeight));
             if (narrow.Left < 0 || narrow.Right > Root.ActualWidth + 1) throw new InvalidOperationException("Narrow settings overflow");
             SaveSettings(); _language = "zh"; LoadSettings(); if (_language != "en" || !Editor.ShowLineNumbers) throw new InvalidOperationException("Preferences did not persist");
             _language = "zh"; _theme = "Dark"; Root.RequestedTheme = ElementTheme.Dark; ApplyLanguage(); UpdateCaption();
-            Home_Click(this, new RoutedEventArgs()); await Task.Delay(150); await CaptureAsync(Path.Combine(root, "welcome.png"));
+            Home_Click(this, new RoutedEventArgs()); await Task.Delay(150);
+            if (Grid.GetRow(RecentArea) != 1) throw new InvalidOperationException("Narrow welcome did not stack");
+            await CaptureAsync(Path.Combine(root, "welcome-narrow.png"));
+            AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1200 * scale), (int)(800 * scale))); await Task.Delay(150);
+            if (Grid.GetColumn(RecentArea) != 1 || Math.Abs(WelcomeFolderButton.ActualWidth - 320) > 1 || Math.Abs(WelcomeFolderButton.ActualHeight - 40) > 1) throw new InvalidOperationException("Wide welcome dimensions failed");
+            await CaptureAsync(Path.Combine(root, "welcome.png"));
             Back_Click(this, new RoutedEventArgs());
             SidebarPicker.SelectedIndex = 1; _projectQuery.Text = "alpha";
             for (var i = 0; i < 80 && (_searchResults.ItemsSource is not SidebarRow[] results || results.Length < 2); i++) await Task.Delay(25);
@@ -397,7 +416,7 @@ public sealed partial class MainWindow : Window
             for (var i = 0; i < 50 && _session!.Problems.Count > 0; i++) await Task.Delay(20);
             await RefreshSidebarAsync(); if (_problemList.Items.Count != 0) throw new InvalidOperationException("Fixed errors must disappear");
             SidebarPicker.SelectedIndex = 0;
-            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.1.9" }));
+            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.2.0", rasterizationScale = Root.XamlRoot.RasterizationScale, uiCommands = "find, replace-all single undo, format single undo, sidebar restore, zoom, page jump, welcome responsive" }));
         }
         catch (Exception error) { await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = false, error = error.ToString() })); }
         if (_args.Contains("--smoke-exit")) { _closing = true; await DisposeProjectAsync(); Close(); }

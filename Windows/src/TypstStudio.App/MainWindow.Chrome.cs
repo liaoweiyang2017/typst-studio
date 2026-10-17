@@ -15,6 +15,7 @@ public sealed partial class MainWindow
         else Root.Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
         ExtendsContentIntoTitleBar = true; SetTitleBar(StudioTitleBar);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+        Root.SizeChanged += (_, _) => UpdateWelcomeLayout();
         StudioTitleBar.SizeChanged += (_, _) => UpdateTitleBarRegions();
         TitleLeft.SizeChanged += (_, _) => UpdateTitleBarRegions();
         MainMenu.SizeChanged += (_, _) => UpdateTitleBarRegions();
@@ -40,6 +41,7 @@ public sealed partial class MainWindow
     private void SyncCaptionColors()
     {
         if (!ExtendsContentIntoTitleBar) return;
+        if (SystemBackdrop == null) Root.Background = Ui.Brush(Root, "SolidBackgroundFillColorBaseBrush");
         if (TitleFileName.Foreground is SolidColorBrush foreground) AppWindow.TitleBar.ButtonForegroundColor = foreground.Color;
         if (Root.Background is SolidColorBrush background) AppWindow.TitleBar.ButtonBackgroundColor = AppWindow.TitleBar.ButtonInactiveBackgroundColor = background.Color;
     }
@@ -47,7 +49,6 @@ public sealed partial class MainWindow
     {
         TitleFileName.Visibility = Workspace.Visibility == Visibility.Visible && _current != null ? Visibility.Visible : Visibility.Collapsed;
         RestoreSidebarButton.Visibility = Workspace.Visibility == Visibility.Visible && _sidebarHidden ? Visibility.Visible : Visibility.Collapsed;
-        ProblemsButton.Visibility = Workspace.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
         StatusArea.BorderThickness = Workspace.Visibility == Visibility.Visible ? Ui.Pad("ThinTop") : Ui.Pad("Zero");
         UpdateTitleBarRegions();
     }

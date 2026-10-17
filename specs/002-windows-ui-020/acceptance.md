@@ -1,28 +1,36 @@
 # Windows 0.2.0 验收记录
 
-当前仅完成规划。所有产品验收待实现后验证。
+2026-10-17。本轮保留 Swift Mac 与 Windows Core 编译、映射、保存实现；用户后续要求已纳入：格式图标完整显示，右下角显示 Typst Studio 0.2.0。
 
 | 项目 | 状态 | 证据/限制 |
 | --- | --- | --- |
-| UI-01 设计令牌 | 待验证 | |
-| UI-02 标题栏与Mica | 待验证 | |
-| UI-03 欢迎页尺寸 | 待验证 | |
-| UI-04 最近工程 | 待验证 | |
-| UI-05 三栏与隐藏侧栏 | 待验证 | |
-| UI-06 图标SelectorBar与文件树 | 待验证 | |
-| UI-07 编辑器头与换行 | 待验证 | |
-| UI-08 查找替换与格式插入 | 待验证 | |
-| UI-09 PDF工具栏 | 待验证 | |
-| UI-10 纸张与映射 | 待验证 | |
-| UI-11 状态栏 | 待验证 | |
-| UI-12 主题/语言/键盘/DPI | 待验证 | |
-| REG-01 原有功能回归 | 待验证 | |
-| REL-01 分阶段编译与发布 | 待验证 | |
+| UI-01 设计令牌 | 通过 | App.xaml 合并 DesignTokens；动态UI也使用Ui资源适配；外观常量扫描与diff检查。 |
+| UI-02 标题栏与Mica | 部分验证 | 实际Windows截图确认原生caption及暗色材质；RightInset与Passthrough使用系统API。真实鼠标拖动/菜单与跨显示器DPI仍需人工复核。 |
+| UI-03 欢迎页尺寸 | 通过 | 原生smoke断言按钮320×40；960与1200 DIP窗口验证上下/左右布局并截图。 |
+| UI-04 最近工程 | 通过，外部入口未实点 | ListView原生选择/hover，路径~和省略，完整路径tooltip；更多菜单仅移除记录或调用系统文件夹启动器。 |
+| UI-05 三栏与隐藏侧栏 | 通过 | 原生smoke验证比例改变、默认均分、侧栏隐藏为0并恢复原宽度；分隔热区6/线1。 |
+| UI-06 五面板与文件树 | 通过 | 原生回归验证跨文件搜索、展开大纲、符号过滤、错误及修复后清空；切换不改变缓冲区。 |
+| UI-07 编辑器头与换行 | 通过 | 保留原生高亮/用户字号；首次布局迁移开启换行；行号/偏好保存回归。 |
+| UI-08 查找与格式 | 通过 | 原生新增测试验证查找、替换全部的一次撤销、格式插入的一次撤销、浮层关闭、28 DIP按钮不被裁切。 |
+| UI-09 PDF工具栏 | 通过，系统外部打开未实点 | 125%缩放及页码跳转断言，适宽、原生百分比输入截图；局部修正ComboBox编辑态padding。 |
+| UI-10 纸张与映射 | 通过 | 24 DIP纸张间距/阴影截图；中文、公式、跨文件、旋转坐标测试；Core/导出字节处理未修改。 |
+| UI-11 状态栏 | 通过 | 28 DIP、语义颜色、侧栏错误数；右下角按最新要求改软件名和版本。 |
+| UI-12 主题/语言/键盘/DPI | 部分验证 | 原生Dark中文/Light英文、设置无溢出、截图及偏好持久化通过。VM实际200%缩放；100/125/150%和完整Tab遍历未实测，不标通过。 |
+| REG-01 原有功能回归 | 通过 | ARM64/x64核心测试：原子保存、CRLF、外部冲突、实时编译、错误恢复、选择/渲染、重复公式/跨文件映射；原生smoke补充编辑撤销和五面板。x64在ARM Windows仿真运行。 |
+| REL-01 构建与发布 | 进行中 | 五阶段Debug x64均成功，0警告/0错误。最后Release/安装包/远程校验待完成。 |
 
-阶段一：Debug x64 build 成功，0 警告/0 错误；日志 C:\TypstStudio-build\stage1-020.log。资源已合并，后续阶段继续替换页面原有外观常量。
+## 测试证据
 
-阶段二：Debug x64成功，0警告/0错误；stage2-020.log。标题栏交互和DPI视觉验证保留到原生运行阶段，尚未据编译结果标记UI-02验收通过。
+本地VM日志 C:\TypstStudio-build\stage1-020.log 至 stage5-020.log；核心 tests-020.log。原生回归输出 Windows/artifacts/qa020/native-smoke.json 和截图（生成产物忽略Git）。当前Debug x64报告success=true，version=0.2.0，rasterizationScale=2。
 
-阶段三：Debug x64成功，0警告/0错误；stage3-020.log。欢迎页与最近工程完成，实际外观/小窗口检查在阶段五执行。
+原生真实窗口截图用于确认Mica及系统caption。RenderTargetBitmap不包含系统材质/按钮，测试截图暂用系统实色背景覆盖后恢复，不能据此声称检验了Mica透明程度。
 
-Phase 4: Debug x64 passed, zero warnings/errors (stage4-020.log). Core compiler, PDF parser and source-mapping files are unchanged. Native behavior and visual acceptance remain pending Phase 5.
+## 发现与修正
+
+- Compact AppBarButton仍有系统模板尺寸，导致36 DIP格式栏裁切。改原生Subtle Button 28 DIP和16 DIP字形，不复制控件模板。
+- 附件部分Segoe字形对应错误图标。按官方字形表修正；数学使用Cambria Math的根号/求和。
+- ComboBox普通Padding不控制编辑态，改局部ComboBoxEditableTextPadding资源覆盖。
+- Window内AdaptiveTrigger未在原生测试稳定切换；改Root.SizeChanged按实际DIP宽度切换，960/1200回归通过。
+- 最近记录加载前清空并去重，防止同一进程重载设置出现重复；路径禁用换行。
+
+未完成的人工交互及指定DPI验证仍保留为验收缺口，不以编译成功替代。

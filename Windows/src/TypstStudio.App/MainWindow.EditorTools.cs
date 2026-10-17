@@ -20,19 +20,22 @@ public sealed partial class MainWindow
         FindActions.Children.Add(Ui.IconButton("\uE70D", T("下一个", "Next match"), (_, _) => FindInEditor(true)));
         FindActions.Children.Add(Ui.IconButton("\uE8AC", T("显示替换", "Show replace"), (_, _) => ReplaceRow.Visibility = ReplaceRow.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible));
         FindActions.Children.Add(Ui.IconButton("\uE711", T("关闭查找 (Esc)", "Close find (Esc)"), (_, _) => CloseFind()));
-        FormatToolbar.PrimaryCommands.Clear();
-        void Format(Symbol icon, string title, Action action)
+        FormatToolbar.Children.Clear();
+        void Format(string glyph, string title, Action action, bool math = false)
         {
-            var b = new AppBarButton { Icon = new SymbolIcon(icon), Label = title, IsCompact = true, Width = Ui.D("ControlHeightStandard"), Height = Ui.D("ControlHeightStandard"), MinWidth = Ui.D("ControlHeightStandard"), Padding = Ui.Pad("Zero") };
-            Ui.Describe(b, title); b.Click += (_, _) => { if (_current != null && !_opening) action(); }; FormatToolbar.PrimaryCommands.Add(b);
+            var b = Ui.IconButton(glyph, title, (_, _) => { if (_current != null && !_opening) action(); });
+            b.Width = b.Height = b.MinWidth = b.MinHeight = Ui.D("FormatButtonSize");
+            if (glyph == "\uEA37") b.Content = new TextBlock { Text = "1.", FontFamily = (FontFamily)Application.Current.Resources["StudioUIFont"], FontSize = Ui.D("FontIcon") };
+            if (math && b.Content is FontIcon icon) icon.FontFamily = (FontFamily)Application.Current.Resources["StudioMathFont"];
+            FormatToolbar.Children.Add(b);
         }
-        Format(Symbol.Bold, T("粗体", "Bold"), () => WrapSelection("*", "*"));
-        Format(Symbol.Italic, T("斜体", "Italic"), () => WrapSelection("_", "_"));
-        Format(Symbol.Underline, T("下划线", "Underline"), () => WrapSelection("#underline[", "]"));
-        Format(Symbol.AlignCenter, T("居中对齐", "Center alignment"), () => WrapSelection("#align(center)[", "]"));
-        Format(Symbol.List, T("无序列表", "Bullet list"), () => PrefixLines("- "));
-        Format(Symbol.Bullets, T("编号列表", "Numbered list"), () => PrefixLines("+ "));
-        Format(Symbol.Calculator, T("公式", "Equation"), () => WrapSelection("$ ", " $"));
+        Format("\uE8DD", T("粗体", "Bold"), () => WrapSelection("*", "*"));
+        Format("\uE8DB", T("斜体", "Italic"), () => WrapSelection("_", "_"));
+        Format("\uE8DC", T("下划线", "Underline"), () => WrapSelection("#underline[", "]"));
+        Format("\uE8E3", T("居中对齐", "Center alignment"), () => WrapSelection("#align(center)[", "]"));
+        Format("\uE8FD", T("无序列表", "Bullet list"), () => PrefixLines("- "));
+        Format("\uEA37", T("编号列表", "Numbered list"), () => PrefixLines("+ "));
+        Format("∑", T("公式", "Equation"), () => WrapSelection("$ ", " $"), math: true);
         SidebarToolbar.Children.Clear();
         SidebarToolbar.Children.Add(Ui.IconButton("\uE8A5", T("新建文件", "New file"), NewFileInProject_Click));
         SidebarToolbar.Children.Add(Ui.IconButton("\uE8F4", T("新建文件夹", "New folder"), NewFolder_Click));

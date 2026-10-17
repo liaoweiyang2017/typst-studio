@@ -7,6 +7,7 @@ internal static class UiText
     public static bool English { get; set; }
     private static readonly Dictionary<string, string> Labels = new()
     {
+        ["显示/隐藏侧边栏"]="Toggle sidebar", ["自动换行"]="Word wrap", ["替换为"]="Replace with", ["替换"]="Replace", ["全部"]="All", ["还没有最近工程"]="No recent projects yet", ["打开一个文件夹后，它会出现在这里。"]="Open a folder to see it here.",
         ["文件"]="File", ["编辑"]="Edit", ["视图"]="View", ["排版"]="Typeset", ["工具"]="Tools", ["开始页"]="Welcome", ["返回文档"]="Back to document",
         ["打开文件夹…"]="Open Folder…", ["打开文件…"]="Open File…", ["从模板新建…"]="New from Template…", ["从模板新建工程…"]="New Project from Template…",
         ["保存"]="Save", ["保存副本…"]="Save Copy…", ["导出 PDF…"]="Export PDF…", ["查找…"]="Find…", ["查找"]="Find", ["放大 PDF"]="Zoom In", ["缩小 PDF"]="Zoom Out",
@@ -25,8 +26,9 @@ internal static class UiText
         if (root is SourceEditor or TreeView || root is FrameworkElement { Name: "SidebarTools" or "RecentProjects" }) return;
         if (root is TextBlock text) text.Text = Translate(text.Text);
         if (root is Button button && button.Content is string content) button.Content = Translate(content);
+        if (root is TextBox input) input.PlaceholderText = Translate(input.PlaceholderText);
         if (root is AutoSuggestBox search) search.PlaceholderText = Translate(search.PlaceholderText);
-        if (root is MenuBar menu) foreach (var item in menu.Items) { item.Title = Translate(item.Title); foreach (var child in item.Items.OfType<MenuFlyoutItem>()) child.Text = Translate(child.Text); }
+        if (root is MenuBar menu) foreach (var item in menu.Items) { item.Title = Translate(item.Title); foreach (var child in item.Items) { if (child is MenuFlyoutItem command) command.Text = Translate(command.Text); else if (child is ToggleMenuFlyoutItem toggle) toggle.Text = Translate(toggle.Text); } }
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++) Apply(VisualTreeHelper.GetChild(root, i));
     }
 }

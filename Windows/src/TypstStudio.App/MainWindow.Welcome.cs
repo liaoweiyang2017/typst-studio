@@ -7,6 +7,16 @@ public sealed partial class MainWindow
 {
     [Microsoft.UI.Xaml.Data.Bindable]
     public sealed record RecentRow(string Name, string Path, string Prefix, string Tail);
+    private void UpdateWelcomeLayout()
+    {
+        var narrow = Root.ActualWidth < Ui.D("WelcomeBreakpoint");
+        WelcomeRightColumn.Width = new GridLength(narrow ? 0 : Ui.D("WelcomeRecentWidth"));
+        WelcomeBrandRow.Height = narrow ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
+        WelcomeRecentRow.Height = new GridLength(narrow ? 1 : 0, GridUnitType.Star);
+        Grid.SetColumn(RecentArea, narrow ? 0 : 1); Grid.SetRow(RecentArea, narrow ? 1 : 0);
+        RecentHeading.Margin = Ui.Pad(narrow ? "HeaderPadding" : "RecentTitleMargin");
+        BrandArea.Margin = Ui.Pad(narrow ? "Pad16" : "Pad24");
+    }
     private void RefreshRecent()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
