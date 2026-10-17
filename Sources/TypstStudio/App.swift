@@ -70,9 +70,16 @@ struct StudioView: View {
     @State private var section = 0
     @State private var search = ""
     @State private var previewVisible = true
+    @State private var sidebarWidth: CGFloat = 230
     var body: some View {
         HSplitView {
-            if model.sidebar { sidebar.frame(minWidth: 190, idealWidth: 230, maxWidth: 260) }
+            if model.sidebar {
+                sidebar.frame(minWidth: 190, idealWidth: 230, maxWidth: 260)
+                    .background(GeometryReader { geometry in
+                        Color.clear.onAppear { sidebarWidth = geometry.size.width }
+                            .onChange(of: geometry.size.width) { sidebarWidth = $0 }
+                    })
+            }
             if previewVisible {
                 EditorPreviewSplit { editorPane } preview: { PreviewPane(model: model) }
             } else { editorPane }
@@ -81,7 +88,8 @@ struct StudioView: View {
         .frame(minWidth: 980, minHeight: 620).tint(.blue)
         .preferredColorScheme(model.theme == "Dark" ? .dark : model.theme == "Light" ? .light : nil)
         .toolbar {
-            ToolbarItem(placement: .navigation) { Button { model.sidebar.toggle() } label: { Image(systemName: "sidebar.left") }.help(model.tr("Toggle sidebar")) }
+            if #available(macOS 26.0, *) { sidebarToolbarItem.sharedBackgroundVisibility(.hidden) }
+            else { sidebarToolbarItem }
             ToolbarItem(placement: .principal) {
                 Text(model.projectURL?.lastPathComponent ?? "Typst Studio").font(.system(size: 13, weight: .semibold)).lineLimit(1)
                     .help(model.projectURL?.path ?? "Typst Studio")
@@ -101,6 +109,15 @@ struct StudioView: View {
                 }
             }.padding(20).frame(width: 650, height: 550)
         }
+    }
+    private var sidebarToolbarItem: some ToolbarContent {
+            ToolbarItem(placement: .navigation) {
+                HStack {
+                    Spacer(minLength: 0)
+                    Button { model.sidebar.toggle() } label: { Image(systemName: "sidebar.left") }
+                        .buttonStyle(.borderless).frame(width: 32, height: 32).help(model.tr("Toggle sidebar"))
+                }.frame(width: model.sidebar ? max(32, sidebarWidth - 100) : 32)
+            }
     }
     var editorPane: some View {
             VStack(spacing: 0) {
