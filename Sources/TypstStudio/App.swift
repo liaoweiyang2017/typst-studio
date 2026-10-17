@@ -128,7 +128,7 @@ struct StudioView: View {
                     if model.compiling { ProgressView().controlSize(.mini).help(model.tr("Compiling…")) }
                     Button { model.compile() } label: { Label(model.tr("Compile"), systemImage: "play.fill").labelStyle(.titleAndIcon) }
                         .buttonStyle(.bordered).controlSize(.small).help(model.compileButtonHelp).disabled(model.compiling)
-                }.padding(.horizontal, 12).frame(height: 36).background(Color(nsColor: .windowBackgroundColor))
+                }.padding(.horizontal, 12).frame(height: StudioLayout.documentToolbarHeight).background(Color(nsColor: .windowBackgroundColor))
                 Divider()
                 SourceEditor(model: model).clipped()
                 if model.showDiagnostics && !model.diagnostics.isEmpty {

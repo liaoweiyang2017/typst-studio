@@ -1,6 +1,8 @@
 import SwiftUI
 import PDFKit
 import CoreImage
+enum StudioLayout { static let documentToolbarHeight: CGFloat = 36 }
+
 enum PDFRenderingStyle: String {
     case original = "Original", night = "Night", green = "Green"
     static func resolve(_ mode: String, darkAlternative: String, isDark: Bool, lightAlternative: String = "Original") -> Self {
@@ -190,18 +192,20 @@ struct PreviewPane: View {
                 Button { model.followCursor.toggle() } label: { Image(systemName: "scope").foregroundStyle(model.followCursor ? .blue : .secondary) }.help("Follow source text")
                 Divider().frame(height: 13)
                 Button { model.exportPDF() } label: { Image(systemName: "arrow.down") }.help("Export PDF").disabled(model.successfulRevision != model.revision)
-            }.font(.system(size: 11)).buttonStyle(.borderless).padding(.horizontal, 10).frame(height: 29).background(Color(nsColor: .textBackgroundColor))
+            }.font(.system(size: 11)).buttonStyle(.borderless).padding(.horizontal, 10).frame(height: StudioLayout.documentToolbarHeight).background(Color(nsColor: .windowBackgroundColor))
             Divider()
-            if let entry = model.pinnedPreviewName { Text(model.tr("Preview entry") + ": " + entry).font(.caption).foregroundStyle(.secondary).padding(.vertical, 3) }
+            Group {
+            if model.pdf != nil { PDFCanvas(model: model, controls: controls, primary: primary) }
+            else { ContentUnavailableView(model.compiling ? "Typesetting…" : "No preview yet", systemImage: "doc.richtext", description: Text("Your document appears here after a successful compile.")).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            }.overlay(alignment: .top) {
             if !model.navigationStatus.isEmpty {
                 HStack {
                     Text(model.tr(model.navigationStatus)).font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button { model.navigationStatus = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
-                }.padding(.horizontal, 10).padding(.vertical, 4)
+                }.padding(.horizontal, 10).padding(.vertical, 4).background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
             }
-            if model.pdf != nil { PDFCanvas(model: model, controls: controls, primary: primary) }
-            else { ContentUnavailableView(model.compiling ? "Typesetting…" : "No preview yet", systemImage: "doc.richtext", description: Text("Your document appears here after a successful compile.")).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            }
         }.preferredColorScheme(model.theme == "Dark" ? .dark : model.theme == "Light" ? .light : nil)
     }
 }

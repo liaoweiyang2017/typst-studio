@@ -22,6 +22,9 @@ public sealed partial class MainWindow
     private async Task VerifyEditorCommandsAsync()
     {
         Root.UpdateLayout();
+        var editorBottom = EditorToolbar.TransformToVisual(Root).TransformPoint(new Windows.Foundation.Point(0, EditorToolbar.ActualHeight)).Y;
+        var previewBottom = PdfToolbar.TransformToVisual(Root).TransformPoint(new Windows.Foundation.Point(0, PdfToolbar.ActualHeight)).Y;
+        if (Math.Abs(editorBottom - previewBottom) > 0.5) throw new InvalidOperationException("Editor and PDF toolbar baselines must align");
         foreach (var element in FormatToolbar.Children.OfType<FrameworkElement>())
         {
             if (element.ActualHeight != Ui.D("FormatButtonSize") || element.ActualHeight > FormatToolbar.ActualHeight) throw new InvalidOperationException("Format button is clipped");

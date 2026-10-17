@@ -15,7 +15,7 @@ public sealed partial class MainWindow : Window
     private readonly Dictionary<string, SourceBuffer> _buffers = new(StringComparer.OrdinalIgnoreCase);
     private TinymistSession? _session;
     private SourceBuffer? _current;
-    private string? _root, _entry, _pdfEntry;
+    private string? _root, _entry;
     private string[] _sources = [];
     private CancellationTokenSource _compile = new();
     private CancellationTokenSource _navigation = new();
@@ -101,7 +101,7 @@ public sealed partial class MainWindow : Window
         if (!confirmed && !await ConfirmUnsavedAsync()) return;
         ShowPage(Workspace); _opening = true; Editor.IsEnabled = false; Files.IsEnabled = false;
         try {
-        await DisposeProjectAsync(); SidebarPicker.SelectedIndex = 0; _projectQuery.Text = ""; _searchResults.ItemsSource = null; _outlineTree.RootNodes.Clear(); _disposed = false; _buffers.Clear(); _current = null; Editor.IsReadOnly = true; SetEditorText(""); UpdateTitle(); _pdf = null; _pdfEntry = null; _pdfRevision = -1;
+        await DisposeProjectAsync(); SidebarPicker.SelectedIndex = 0; _projectQuery.Text = ""; _searchResults.ItemsSource = null; _outlineTree.RootNodes.Clear(); _disposed = false; _buffers.Clear(); _current = null; Editor.IsReadOnly = true; SetEditorText(""); UpdateTitle(); _pdf = null; _pdfRevision = -1;
         _root = Path.GetFullPath(root); _revision++; Busy.IsActive = true; SetStatus(UiText.T("正在读取工程…", "Reading project\u2026"));
         _sources = await Task.Run(() => ProjectFiles.Sources(_root));
         if (_disposed) return;
@@ -227,7 +227,7 @@ public sealed partial class MainWindow : Window
             if (revision != _revision || session != _session) return;
             if (_pdf == null || !pdf.AsSpan().SequenceEqual(_pdf)) await Preview.SetDocumentAsync(pdf, () => revision == _revision && session == _session);
             if (revision != _revision || session != _session) return;
-            _compileError = ""; _pdf = pdf; _pdfEntry = _entry; _pdfRevision = revision; if (SidebarPicker.SelectedIndex is 2 or 4) _ = RefreshSidebarAsync(); PdfTitle.Text = "主文档 · " + Path.GetFileName(_entry);
+            _compileError = ""; _pdf = pdf; _pdfRevision = revision; if (SidebarPicker.SelectedIndex is 2 or 4) _ = RefreshSidebarAsync();
             SetStatus(UiText.English ? $"Compiled · {watch.Elapsed.TotalMilliseconds:F0} ms" : $"编译完成 · {watch.Elapsed.TotalMilliseconds:F0} ms");
             if (!_pdfHintShown) { SetStatus(Status.Text + UiText.T(" · Ctrl+单击 PDF 可定位源码", " · Ctrl+click PDF to locate source")); _pdfHintShown = true; SaveSettings(); }
         }
