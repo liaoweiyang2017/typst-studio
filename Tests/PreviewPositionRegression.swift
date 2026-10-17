@@ -25,9 +25,13 @@ import PDFKit
             view.go(to: PDFDestination(page: view.document!.page(at: 3)!, at: CGPoint(x: 0, y: 600)))
             try await Task.sleep(nanoseconds: 150_000_000)
             let before = view.currentDestination!, page = view.document!.index(for: before.page!)
+            let original = model.pdf
             model.openFile(preface)
+            try await Task.sleep(nanoseconds: 200_000_000)
+            precondition(model.pdf === original && !model.compiling && view.document!.index(for: view.currentDestination!.page!) == page, "Browsing must preserve PDF position")
+            model.compile()
             try await wait { model.preview?.document?.pageCount == 1 && !model.compiling }
-            model.openFile(main)
+            model.openFile(main); model.compile()
             try await wait { model.preview?.document?.pageCount == 6 && !model.compiling }
             try await Task.sleep(nanoseconds: 150_000_000)
             let restored = model.preview as! StudioPDFView

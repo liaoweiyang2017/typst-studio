@@ -13,6 +13,7 @@ final class TinymistCompiler: @unchecked Sendable {
     private var ready = false, busy = false, stopped = false
     private var externalCompile = false
     private var documents: [String: String] = [:]
+    private var pendingIncluded: [String: String] = [:]
     private var versions: [String: Int] = [:]
     private var lastResult: CompileResult?
     private var lastPDF: Data?
@@ -67,12 +68,12 @@ final class TinymistCompiler: @unchecked Sendable {
     /// Keep the same entry when editing a source reached through an inverse jump.
     func updateIncludedFile(_ url: URL, source: String, revision: Int, completion: @escaping (Int, CompileResult) -> Void) {
         connection.queue.async { [self] in
-            guard let old = current, ready else { return }
+            guard let old = pending ?? current else { return }
             if documents[url.path] != source { finishNavigation(.failure(TinymistConnection.error("Document changed. Try navigating again."))) }
-            update(url.path, source: source)
+            pendingIncluded[url.path] = source
             pending = Request(source: old.source, directory: old.directory, root: old.root, document: old.document, revision: revision, completion: completion)
             lastResult = nil
-            if !busy { drain() }
+            if ready && !busy { drain() }
         }
     }
     func closeIncludedFiles() {
@@ -94,6 +95,7 @@ final class TinymistCompiler: @unchecked Sendable {
         }
         finishNavigation(.failure(TinymistConnection.error("Document changed. Try navigating again.")))
         busy = true
+        for (path, source) in pendingIncluded { update(path, source: source) }; pendingIncluded.removeAll()
         update(entry, source: request.source)
         connection.command("tinymist.pinMain", [entry]) { [weak self] _ in self?.export(request) }
     }

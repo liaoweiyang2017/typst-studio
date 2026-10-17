@@ -1,0 +1,31 @@
+PASS: PDF generation, relative include, math, diagnostics, project root isolation
+Error format: <stdin>:1:15: error: expected expression
+
+PASS: welcome, folder main selection, nested imports, auto compile, expanded parent, all file kinds, empty folders, PDF outline
+PASS: project search includes nested source
+PASS: failing edit retains preview, stale export blocked, recovery compile
+PASS: fit width independent of height and responsive to pane width
+PASS: obsolete compilation cancellation
+PASS: all symbol palette expressions compile
+PASS: one watch process, dependency edits, compiler errors and recovery
+PASS: coalesced edits publish latest revision
+PASS: initial editor/PDF widths match
+PASS: real hosted editor loads project and main run loop stays responsive
+
+PASS: browsing does not compile or change preview entry
+PASS: cached preview restored synchronously in 0.17 ms
+PASS: inactive document dependencies update its cached preview
+PASS: disk edits invalidate cached export; errors preserve last good preview
+PASS: entry cache evicts beyond three sessions without certifying stale PDF
+PASS: pending saved entry changes survive an immediate included edit
+PASS: all five buttons have full hit rectangles, accept first click, and dispatch one action
+
+PASS: page, viewport offset and manual zoom restored across file switches
+
+PASS: automatic/light/dark color policy, night/green pixels, view filters and unchanged exported PDF rendering
+PASS: semantic versions, allowlisted URLs, startup once, newer/no downgrade, HTTP and malformed-feed recovery
+PASS: language override, system fallback, stable English keys and user content
+PASS: exact identical-formula spans, math identifiers, cross-file mapping, Chinese scalar/UTF-16 positions and rotated frames
+PASS: source revision changes cancel pending navigation
+PASS: native model inverse jump preserves main PDF, included unsaved edits compile through the same entry without writing source
+PASS: background progress, cancellation, explicit restart gate, save-cancel protection and failure state reset

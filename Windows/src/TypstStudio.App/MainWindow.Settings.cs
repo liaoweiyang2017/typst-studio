@@ -49,7 +49,7 @@ public sealed partial class MainWindow
         var reset = new Button { Content = T("恢复均分", "Equal widths"), Width = Ui.D("SettingsControlWidth") }; reset.Click += ResetSplit_Click;
         Row(Symbol.TwoPage, T("源码与 PDF 分栏", "Editor / PDF split"), T("拖动中间分隔线调整宽度，自动记住比例。", "Drag the divider; the ratio is remembered."), reset);
         Row(Symbol.Find, T("双向定位", "Source mapping"), T("源码 Ctrl+Shift+J；PDF 中 Ctrl+单击公式或选中文字后 Ctrl+Alt+J。", "Source: Ctrl+Shift+J. PDF: Ctrl+click, or select text and press Ctrl+Alt+J."));
-        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.2.0", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
+        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.2.1", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
         ShowPage(SettingsPage);
     }
     private void ApplyLanguage()

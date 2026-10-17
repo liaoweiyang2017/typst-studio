@@ -1,0 +1,7 @@
+PASS: browsing does not compile or change preview entry
+PASS: cached preview restored synchronously in 0.17 ms
+PASS: inactive document dependencies update its cached preview
+PASS: disk edits invalidate cached export; errors preserve last good preview
+PASS: entry cache evicts beyond three sessions without certifying stale PDF
+PASS: pending saved entry changes survive an immediate included edit
+EMDoc cached switch: 0.14 ms, 182 pages

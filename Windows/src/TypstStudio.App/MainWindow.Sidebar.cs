@@ -137,6 +137,9 @@ public sealed partial class MainWindow
                 if (_problemSignature == signature && _problemList.ItemsSource != null) return;
                 _problemSignature = signature;
                 _problemList.ItemsSource = problems.Select(p => new SidebarRow($"{(root != null && Path.IsPathFullyQualified(p.Path) && ProjectFiles.Inside(root, p.Path) ? Path.GetRelativePath(root, p.Path) : p.Path)}:{p.Line + 1}", p.Message, p)).ToArray();
+                // Export errors can arrive before LSP diagnostics; never show an empty error list.
+                if (problems.Count == 0 && _compileError.Length > 0)
+                    _problemList.ItemsSource = new[] { new SidebarRow(T("编译失败", "Compilation failed"), _compileError, _compileError) };
                 _problemStatus.Text = problems.Count > 0 ? T($"{problems.Count} 个问题", $"{problems.Count} problems") : _compileError.Length > 0 ? _compileError : T("✓ 没有问题。", "✓ No problems."); _retryCompile.IsEnabled = _session != null && !Busy.IsActive;
             }
         }

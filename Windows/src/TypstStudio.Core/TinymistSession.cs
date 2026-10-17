@@ -18,7 +18,7 @@ public sealed class TinymistSession : IAsyncDisposable
     private TaskCompletionSource<PdfPoint[]>? _forward;
     private TaskCompletionSource<SourcePoint>? _inverse;
     public string Root { get; }
-    public string Entry { get; }
+    public string Entry { get; private set; }
     public event Action<string>? DiagnosticChanged;
     public event Action<string>? Failed;
     private readonly ConcurrentDictionary<string, CompilerProblem[]> _diagnostics = new();
@@ -45,11 +45,24 @@ public sealed class TinymistSession : IAsyncDisposable
         else await _lsp.NotifyAsync("textDocument/didChange", new { textDocument = new { uri, version }, contentChanges = new[] { new { text } } }, token);
         _documents[path] = text;
     }
-    public async Task<byte[]> CompileAsync(IReadOnlyDictionary<string, string> documents, CancellationToken token)
+    public async Task<byte[]> CompileAsync(IReadOnlyDictionary<string, string> documents, CancellationToken token, string? entry = null)
     {
         await _gate.WaitAsync(token);
         try
         {
+            var target = entry == null ? Entry : Path.GetFullPath(entry);
+            if (!ProjectFiles.Inside(Root, target)) throw new IOException("The compile entry must belong to the project.");
+            if (!target.Equals(Entry, StringComparison.OrdinalIgnoreCase))
+            {
+                // Replace only the mapping task; keep the compiler process and document cache warm.
+                if (_socket != null) {
+                    var old = _socket; _socket = null; _frame = null; old.Abort(); old.Dispose();
+                    await _lsp.CommandAsync("tinymist.doKillPreview", ["studio"], _lifetime.Token);
+                }
+                await _lsp.CommandAsync("tinymist.pinMain", [target], _lifetime.Token);
+                Entry = target; _diagnostics.Clear(); DiagnosticChanged?.Invoke("");
+                token.ThrowIfCancellationRequested();
+            }
             foreach (var (path, text) in documents) await UpdateAsync(path, text, token);
             var result = await _lsp.CommandAsync("tinymist.exportPdf", [Entry, new { }, new { write = false }], token);
             return Convert.FromBase64String(result.GetProperty("data").GetString()!);
@@ -124,7 +137,7 @@ public sealed class TinymistSession : IAsyncDisposable
                 else if (!bytes.AsSpan().StartsWith("invert-colors"u8)) _frame?.TrySetResult(true);
             }
         }
-        catch (Exception error) { _frame?.TrySetException(error); _forward?.TrySetException(error); _inverse?.TrySetException(error); }
+        catch (Exception error) { if (!ReferenceEquals(_socket, socket)) return; _frame?.TrySetException(error); _forward?.TrySetException(error); _inverse?.TrySetException(error); }
     }
     private void OnNotification(string method, JsonElement p)
     {

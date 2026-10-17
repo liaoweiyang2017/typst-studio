@@ -14,7 +14,7 @@ struct WelcomeView: View {
                     Image(nsImage: icon).resizable().scaledToFit().frame(width: 132, height: 132)
                 }
                 Text("Typst Studio").font(.system(size: 42, weight: .bold)).padding(.top, 18)
-                Text(model.tr("Version") + " " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.8")).font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
+                Text(model.tr("Version") + " " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.1")).font(.system(size: 16)).foregroundStyle(.secondary).padding(.top, 5)
                 Spacer().frame(height: 38)
                 VStack(spacing: 13) {
                     welcomeButton(model.tr("Open Folder…"), icon: "folder") { model.openPanel(folder: true) }

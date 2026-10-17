@@ -86,6 +86,10 @@ struct StudioView: View {
                 HStack(spacing: 7) { Text(model.title).font(.system(size: 13, weight: .semibold)); if model.dirty { Circle().fill(.secondary).frame(width: 5, height: 5) } }
             }
             ToolbarItemGroup(placement: .primaryAction) {
+                Button { model.compile() } label: { Label(model.tr("Compile"), systemImage: "play.fill") }
+                    .help(model.compileButtonHelp).disabled(model.compiling)
+                if model.compiling { ProgressView().controlSize(.small).help(model.tr("Compiling…")) }
+
                 Button { section = 4; model.sidebar = true; model.showDiagnostics.toggle() } label: { Image(systemName: model.diagnostics.isEmpty ? "exclamationmark.triangle.fill" : "exclamationmark.triangle.fill").foregroundStyle(model.diagnostics.isEmpty ? Color.secondary : .orange) }.help(model.status)
                 Button { previewVisible.toggle() } label: { Image(systemName: "rectangle.on.rectangle").foregroundStyle(previewVisible ? Color.blue : .secondary) }.help(model.tr("Toggle PDF preview"))
             }

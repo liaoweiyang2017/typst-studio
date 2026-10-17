@@ -70,7 +70,11 @@ public sealed partial class MainWindow
     private void StatusButton_Click(object sender, RoutedEventArgs e) { if (_compileError.Length > 0 || (_session?.Problems.Count ?? 0) > 0) Problems_Click(sender, e); }
     private void UpdateCompilePresentation()
     {
-        var count = _session?.Problems.Count ?? 0; SidebarPicker.SetProblemCount(count);
+        CompileButton.IsEnabled = _current != null && !_opening && !Busy.IsActive;
+        CompileLabel.Text = T("编译", "Compile");
+        Ui.Describe(CompileButton, T("编译当前文件", "Compile current file") + ": " + (_current == null ? "—" : Path.GetFileName(_current.Path)) + " (Ctrl+B)\n" + T("预览入口", "Preview entry") + ": " + (_pdfEntry == null ? "—" : Path.GetFileName(_pdfEntry)));
+
+        var count = Math.Max(_session?.Problems.Count ?? 0, _compileError.Length > 0 ? 1 : 0); SidebarPicker.SetProblemCount(count);
         var failed = _compileError.Length > 0 || _session?.Problems.Any(p => p.Severity == 1) == true;
         CompileStateIcon.Glyph = failed ? "\uE783" : "\uE73E"; CompileStateIcon.Visibility = Busy.IsActive || _pdf == null && !failed ? Visibility.Collapsed : Visibility.Visible;
         CompileStateIcon.Foreground = Ui.Brush(Root, failed ? "SystemFillColorCriticalBrush" : "SystemFillColorSuccessBrush");

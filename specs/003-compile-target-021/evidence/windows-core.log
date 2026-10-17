@@ -1,0 +1,18 @@
+PASS: syntax spans and reversible multi-line comments
+PASS: project discovery, Unicode coordinates, atomic save, CRLF and conflict preservation
+PASS: project search, symbol insertion and hidden snapshots
+Initial compile: 31 ms
+PASS: PDFium rendering/text selection, formulas, exact repeated formulas, included files, rotated frames
+PASS: explicit entry switches reuse compiler and rebuild exact mapping task
+PASS: unsaved dependencies, compiler errors and recovery
+PASS: every palette symbol compiles
+ARCHITECTURE: Arm64
+PASS: syntax spans and reversible multi-line comments
+PASS: project discovery, Unicode coordinates, atomic save, CRLF and conflict preservation
+PASS: project search, symbol insertion and hidden snapshots
+Initial compile: 30 ms
+PASS: PDFium rendering/text selection, formulas, exact repeated formulas, included files, rotated frames
+PASS: explicit entry switches reuse compiler and rebuild exact mapping task
+PASS: unsaved dependencies, compiler errors and recovery
+PASS: every palette symbol compiles
+ARCHITECTURE: X64

@@ -69,6 +69,18 @@ try
     var rotatedSource = await engine.InverseAsync(rotated.Page, rotated.X + .5, rotated.Y - 1, CancellationToken.None);
     Check(rotatedSource.Line == 3, "Rotated formula mapping");
     Console.WriteLine("PASS: PDFium rendering/text selection, formulas, exact repeated formulas, included files, rotated frames");
+    var standalone = Path.Combine(root, "standalone.typ");
+    var standaloneText = "= Standalone\n$ gamma $";
+    documents[standalone] = standaloneText;
+    var standalonePdf = await engine.CompileAsync(documents, CancellationToken.None, standalone);
+    using (var document = new PdfDocument(standalonePdf)) Check(document.Pages.Count == 1 && engine.Entry == standalone, "Explicit entry switch");
+    var standaloneMap = await engine.ForwardAsync(standalone, 1, 2, CancellationToken.None);
+    var standalonePoint = standaloneMap.Points.First();
+    Check((await engine.InverseAsync(standalonePoint.Page, standalonePoint.X + .5, standalonePoint.Y - 1, CancellationToken.None)).Path == standalone, "Mapping task follows explicit entry");
+    await engine.CompileAsync(documents, CancellationToken.None, main);
+    var back = (await engine.ForwardAsync(child, childPosition.Line, childPosition.Column, CancellationToken.None)).Points.First();
+    Check(back.Page == 2 && (await engine.InverseAsync(back.Page, back.X + .5, back.Y - 1, CancellationToken.None)).Path == child, "Restored main entry mapping");
+    Console.WriteLine("PASS: explicit entry switches reuse compiler and rebuild exact mapping task");
     documents[child] = childText + "\n#pagebreak()\n= Unsaved content";
     var updated = await engine.CompileAsync(documents, CancellationToken.None);
     using (var document = new PdfDocument(updated)) Check(document.Pages.Count == 3, "In-memory included edit");

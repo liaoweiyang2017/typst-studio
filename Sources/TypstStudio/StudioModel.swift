@@ -37,6 +37,8 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     @Published var jumpRange: NSRange?
     @Published var navigationStatus = ""
     private var pinnedSessionKey: String?
+    private var displayedSessionKey: String?
+    private var displayedEntryURL: URL?
     private var navigationSerial = UUID()
     private var navigationDebounce: DispatchWorkItem?
     @Published var sidebar = true
@@ -122,7 +124,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     }
     var errorLine: Int? {
         let path = NSRegularExpression.escapedPattern(for: fileURL?.path ?? (projectURL ?? FileManager.default.temporaryDirectory).appendingPathComponent(".typst-studio-untitled.typ").path)
-        guard let re = try? NSRegularExpression(pattern: "(?:" + path + #"|<stdin>|-):(\d+):(\d+):"#), let m = re.firstMatch(in: diagnostics, range: NSRange(diagnostics.startIndex..., in: diagnostics)), let r = Range(m.range(at: 1), in: diagnostics) else { return nil }
+        guard let re = try? NSRegularExpression(pattern: "(?:" + path + #"|<stdin>|-):(\d+):(\d+)"#), let m = re.firstMatch(in: diagnostics, range: NSRange(diagnostics.startIndex..., in: diagnostics)), let r = Range(m.range(at: 1), in: diagnostics) else { return nil }
         return Int(diagnostics[r])
     }
     func changed(_ value: String) { navigationSerial = UUID(); navigationStatus = ""; text = value; dirty = text != lastSavedText; revision += 1; scheduleCompile() }
@@ -132,13 +134,21 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     }
     func scheduleCompile() {
         debounce?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.persistRecovery(); self?.compile() }
+        if pinnedSessionKey == nil { pinnedSessionKey = documentKey; session(for: activeSessionKey).entryURL = fileURL }
+        let key = activeSessionKey, sourceFile = fileURL, source = text, version = revision
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.activeSessionKey == key else { return }
+            self.debounce = nil; self.persistRecovery()
+            self.compilePreview(file: sourceFile, source: source, version: version)
+        }
         debounce = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
     }
     private var activeSessionKey: String { pinnedSessionKey ?? documentKey }
-    var previewDocumentKey: String { activeSessionKey }
-    var pinnedPreviewName: String? { pinnedSessionKey.flatMap { sessions[$0]?.entryURL?.lastPathComponent } }
+    var previewDocumentKey: String { displayedSessionKey ?? activeSessionKey }
+    var pinnedPreviewName: String? { displayedEntryURL?.lastPathComponent }
+    var compileTargetURL: URL? { sessions[activeSessionKey]?.entryURL }
+    var compileButtonHelp: String { tr("Compile current file") + ": " + title + " (⌘B)" }
     func rememberPreview(_ position: PreviewPosition, for key: String) { sessions[key]?.previewPosition = position }
     func previewPosition(for key: String) -> PreviewPosition? { sessions[key]?.previewPosition }
     private func capturePreview() {
@@ -162,15 +172,27 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     func shutdownCompiler() {
         debounce?.cancel(); navigationDebounce?.cancel(); navigationSerial = UUID()
         for session in sessions.values { session.compiler.shutdown() }
-        sessions.removeAll(); sessionOrder.removeAll(); pinnedSessionKey = nil
+        sessions.removeAll(); sessionOrder.removeAll(); pinnedSessionKey = nil; displayedSessionKey = nil; displayedEntryURL = nil
     }
+    /// Explicit command: the visible editor becomes the preview entry.
     func compile() {
+        guard !showWelcome else { return }
+        debounce?.cancel(); debounce = nil; capturePreview()
+        navigationSerial = UUID(); navigationDebounce?.cancel()
+        let target = documentKey
+        pinnedSessionKey = target
+        let session = session(for: target); session.entryURL = fileURL
+        revision += 1; successfulRevision = -1
+        if let cached = session.pdf { pdf = cached; displayedSessionKey = target; displayedEntryURL = session.entryURL }
+        compilePreview(file: fileURL, source: text, version: revision)
+    }
+    /// Automatic edits update the fixed entry; browsing never calls this method.
+    private func compilePreview(file sourceFile: URL?, source: String, version: Int) {
         guard !showWelcome else { return }
         compiling = true; status = pdf == nil ? "Typesetting…" : "Updating preview…"
         let key = activeSessionKey, session = session(for: activeSessionKey)
-        if pinnedSessionKey == nil { session.source = text; session.entryURL = fileURL }
-        session.revision = revision
-        let directory = fileURL?.deletingLastPathComponent() ?? projectURL ?? FileManager.default.temporaryDirectory
+        session.revision = version
+        let directory = session.entryURL?.deletingLastPathComponent() ?? projectURL ?? FileManager.default.temporaryDirectory
         let completion: (Int, CompileResult) -> Void = { [weak self, weak session] version, result in
             let document = result.pdf.flatMap { PDFDocument(data: $0) }
             DispatchQueue.main.async {
@@ -179,17 +201,18 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
                 session.diagnostics = result.diagnostics; session.success = result.success; session.elapsed = result.elapsed
                 guard self.activeSessionKey == key, self.revision == version, !self.showWelcome else { return }
                 self.compiling = false; self.elapsed = session.elapsed; self.diagnostics = session.diagnostics
-                self.pdf = session.pdf
-                if session.success, session.pdf != nil {
+                if session.success, let pdf = session.pdf {
+                    self.pdf = pdf; self.displayedSessionKey = key; self.displayedEntryURL = session.entryURL
                     self.successfulRevision = version; self.status = "Preview up to date"
                 } else { self.successfulRevision = -1; self.status = "Compilation failed · last successful preview"; self.showDiagnostics = true }
             }
         }
-        if pinnedSessionKey != nil, let fileURL {
-            session.compiler.updateIncludedFile(fileURL, source: text, revision: revision, completion: completion)
+        if let sourceFile, sourceFile != session.entryURL {
+            session.compiler.updateIncludedFile(sourceFile, source: source, revision: version, completion: completion)
         } else {
-            session.compiler.submit(.init(source: text, directory: directory, root: projectURL ?? directory,
-                document: fileURL?.path ?? "untitled", revision: revision, completion: completion))
+            session.source = source
+            session.compiler.submit(.init(source: source, directory: directory, root: projectURL ?? directory,
+                document: session.entryURL?.path ?? "untitled", revision: version, completion: completion))
         }
     }
     private var updateRestartApproved = false
@@ -211,7 +234,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         panel.allowedContentTypes = [UTType(filenameExtension: "typ") ?? .plainText]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let templates = ["= Untitled\n\nStart writing here.\n", StudioModel.sample, "#set page(paper: \"a4\")\n#set heading(numbering: \"1.\")\n= Mathematics notes\n\n$ integral_0^1 x dif x = 1/2 $\n"]
-        do { try templates[index].write(to: url, atomically: true, encoding: .utf8); dirty = false; fileURL = nil; openFile(url) }
+        do { try templates[index].write(to: url, atomically: true, encoding: .utf8); dirty = false; fileURL = nil; openFile(url); if compileTargetURL != url { compile() } }
         catch { report(error.localizedDescription) }
     }
     func newDocument() {
@@ -229,7 +252,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     func openProject(_ url: URL) {
         let url = url.standardizedFileURL.resolvingSymlinksInPath()
         guard confirmDiscard() else { return }
-        if projectURL != url { shutdownCompiler() }
+        shutdownCompiler()
         projectURL = url; files = []; fileURL = nil; text = ""; lastSavedText = ""; dirty = false
         pdf = nil; diagnostics = ""; revision += 1; successfulRevision = -1
         showWelcome = false; expandedDirectories = []; rememberProject(url)
@@ -239,21 +262,19 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
         let url = url.standardizedFileURL.resolvingSymlinksInPath()
         if url.pathExtension != "typ" { assetURL = url; return }
         guard fileURL != url, confirmDiscard() else { return }
-        capturePreview();
-        let previousKey = activeSessionKey
-        if !preservingPreview, let pinnedSessionKey { sessions[pinnedSessionKey]?.compiler.closeIncludedFiles() }
+        capturePreview()
         navigationSerial = UUID(); navigationDebounce?.cancel(); jumpRange = nil; navigationStatus = ""
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
+            // A discarded edit must not remain in the compiler's in-memory include.
+            if dirty { text = fileURL.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? lastSavedText; dirty = false; revision += 1; debounce?.cancel(); debounce = nil; compilePreview(file: fileURL, source: text, version: revision) }
+            if let pending = debounce { pending.perform(); pending.cancel(); debounce = nil }
+            if projectURL == nil || !url.path.hasPrefix(projectURL!.path + "/") {
+                shutdownCompiler(); projectURL = url.deletingLastPathComponent(); pdf = nil; successfulRevision = -1
+            }
             showWelcome = false; fileURL = url; text = content; jumpLine = 1; lastSavedText = content; dirty = false
-            if projectURL == nil || !url.path.hasPrefix(projectURL!.path + "/") { projectURL = url.deletingLastPathComponent() }
-            revision += 1
-            pinnedSessionKey = preservingPreview ? previousKey : nil
-            let cached = session(for: activeSessionKey)
-            pdf = cached.pdf; diagnostics = cached.source == content ? cached.diagnostics : ""
-            successfulRevision = -1; compiling = true
-            status = cached.pdf == nil ? "Typesetting…" : "Restoring preview…"
-            editor?.undoManager?.removeAllActions(); expandToFile(); if let projectURL { rememberProject(projectURL) }; if files.isEmpty { refreshFiles() }; persistRecovery(); scheduleCompile()
+            editor?.undoManager?.removeAllActions(); expandToFile(); if let projectURL { rememberProject(projectURL) }; if files.isEmpty { refreshFiles() }; persistRecovery()
+            if pinnedSessionKey == nil { compile() }
         } catch { report(error.localizedDescription) }
     }
     @discardableResult func save(as: Bool = false) -> Bool {
@@ -269,6 +290,10 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
                 guard a.runModal() == .alertFirstButtonReturn else { return false }
             }
             try text.write(to: destination, atomically: true, encoding: .utf8)
+            if destination != fileURL {
+                if let projectURL, !destination.path.hasPrefix(projectURL.path + "/") { shutdownCompiler() }
+                pinnedSessionKey = nil
+            }
             fileURL = destination; lastSavedText = text; dirty = false
             if projectURL == nil || !destination.path.hasPrefix(projectURL!.path + "/") { projectURL = destination.deletingLastPathComponent() }
             refreshFiles(); persistRecovery(); revision += 1; scheduleCompile(); return true
@@ -291,7 +316,7 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     }
     func exportPDF() {
         guard successfulRevision == revision, let pdf else { report("Wait for a successful compile of the current document before exporting."); return }
-        let p = NSSavePanel(); p.allowedContentTypes = [.pdf]; p.nameFieldStringValue = (title as NSString).deletingPathExtension + ".pdf"
+        let p = NSSavePanel(); p.allowedContentTypes = [.pdf]; p.nameFieldStringValue = ((pinnedPreviewName ?? title) as NSString).deletingPathExtension + ".pdf"
         if p.runModal() == .OK, let url = p.url, !pdf.write(to: url) { report("Could not write the PDF.") }
     }
     func wrapSelection(_ prefix: String, _ suffix: String) {

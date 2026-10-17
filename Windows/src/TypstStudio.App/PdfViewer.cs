@@ -66,11 +66,11 @@ public sealed class PdfViewer : Grid
         _scroll.ViewChanged += (_, _) => { ViewMetricsChanged?.Invoke(); PageChanged?.Invoke(CurrentPage, _pages.Count); ScheduleRender(); };
         SizeChanged += (_, _) => { LayoutPages(); ScheduleRender(); };
     }
-    public async Task SetDocumentAsync(byte[] bytes)
+    public async Task SetDocumentAsync(byte[] bytes, Func<bool>? isCurrent = null)
     {
         var generation = ++_generation;
         var document = await Task.Run(() => new PdfDocument(bytes));
-        if (generation != _generation) { await Task.Run(document.Dispose); return; }
+        if (generation != _generation || isCurrent?.Invoke() == false) { await Task.Run(document.Dispose); return; }
         _render.Cancel(); _render.Dispose(); _render = new();
         var old = _document; _document = document; _selection = null;
         if (old != null) _ = Task.Run(old.Dispose);

@@ -71,6 +71,7 @@ import PDFKit
         model.jumpFromPDF(page: page, point: CGPoint(x: b.x + 0.5, y: bounds.maxY - b.y + 1))
         try await wait { model.fileURL == child && model.jumpRange != nil }
         precondition(model.pdf?.pageCount == 2, "Inverse navigation must preserve the main PDF")
+        precondition(!model.compiling, "Inverse navigation must not schedule compilation")
         try await wait { !model.compiling && model.successfulRevision == model.revision }
         model.changed(childText + "\n#pagebreak()\n= Unsaved included edit")
         try await wait { model.pdf?.pageCount == 3 && model.successfulRevision == model.revision }

@@ -14,7 +14,7 @@ import Sparkle
     @Published private(set) var readyToRestart = false
     @Published var showBanner = false
     @Published private(set) var details = ""
-    let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.8"
+    let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.1"
     var prepareToRestart: (() -> Bool)?
     private var updater: SPUUpdater!
     private var started = false

@@ -44,4 +44,4 @@ The app's `--smoke <owned-fixture-directory>` mode drives the real WinUI editor 
 
 ## Source and releases
 
-Source stays in the private typst-studio repository. Windows releases use `windows-v0.2.0` tags in the public distribution repository and do not replace the macOS Sparkle latest feed. Windows 0.2.0 packages are not Authenticode-signed.
+Source stays in the private typst-studio repository. Windows releases use `windows-v0.2.1` tags in the public distribution repository and do not replace the macOS Sparkle latest feed. Windows 0.2.1 packages are not Authenticode-signed.
