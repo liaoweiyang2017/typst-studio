@@ -5,14 +5,15 @@ public sealed partial class MainWindow
     private async Task CaptureProductAsync(string root, string output)
     {
         Directory.CreateDirectory(output);
+        var dark = _args.Contains("--dark-green");
         try {
-            _language = "en"; _theme = "Light"; Root.RequestedTheme = ElementTheme.Light; ApplyLanguage(); UpdateCaption();
+            _language = "en"; _theme = dark ? "Dark" : "Light"; Root.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light; ApplyLanguage(); UpdateCaption();
             _recent.Clear(); _recent.Add(root); RefreshRecent(); Home_Click(this, new RoutedEventArgs());
             var scale = Root.XamlRoot.RasterizationScale; AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1200 * scale), (int)(800 * scale))); await Task.Delay(200);
             await CaptureAsync(Path.Combine(output, "windows-welcome.png"));
             await OpenProjectAsync(root, confirmed: true); if (_watcher != null) _watcher.EnableRaisingEvents = false;
-            _theme = "Light"; Root.RequestedTheme = ElementTheme.Light; UpdateCaption(); await Task.Delay(350); Editor.ApplyStyle(); UpdateEditorPosition(); Preview.FitPage(); await Preview.WaitForRenderAsync();
-            await CaptureAsync(Path.Combine(output, "windows-editor.png"));
+            _pdfMode = dark ? "Green" : "Standard"; Preview.SetColorMode(_pdfMode); UpdateCaption(); await Task.Delay(350); Editor.ApplyStyle(); UpdateEditorPosition(); Preview.FitPage(); await Preview.WaitForRenderAsync();
+            await CaptureAsync(Path.Combine(output, dark ? "windows-editor-dark-green.png" : "windows-editor-light.png"));
             _theme = "Light"; Root.RequestedTheme = ElementTheme.Light; UpdateCaption(); Settings_Click(this, new RoutedEventArgs()); await Task.Delay(200);
             await CaptureAsync(Path.Combine(output, "windows-settings.png"));
             await File.WriteAllTextAsync(Path.Combine(output, "windows-capture.txt"), "ok");

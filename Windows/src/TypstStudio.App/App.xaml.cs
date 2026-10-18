@@ -13,6 +13,8 @@ public partial class App : Application
     public App()
     {
         Trace("App constructor");
+        // Capture each appearance in its own process so native resource caches start in that theme.
+        if (Environment.GetCommandLineArgs().Contains("--screenshots")) RequestedTheme = Environment.GetCommandLineArgs().Contains("--dark-green") ? ApplicationTheme.Dark : ApplicationTheme.Light;
         UnhandledException += (_, e) => { Trace(e.Exception.ToString()); foreach (System.Collections.DictionaryEntry item in e.Exception.Data) Trace(item.Key + "=" + item.Value); };
         try { InitializeComponent(); if (Environment.GetCommandLineArgs().Contains("--smoke")) { DebugSettings.IsXamlResourceReferenceTracingEnabled = true; DebugSettings.XamlResourceReferenceFailed += (_, e) => Trace(e.Message); DebugSettings.BindingFailed += (_, e) => Trace(e.Message); } Trace("App resources loaded"); } catch (Exception e) { Trace(e.ToString()); foreach (System.Collections.DictionaryEntry item in e.Data) Trace(item.Key + "=" + item.Value); throw; }
     }

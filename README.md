@@ -39,7 +39,13 @@ The current Mac distribution uses an ad-hoc signature and is not Developer ID no
 
 ### macOS
 
-![macOS editor and PDF preview](docs/screenshots/macos-editor.png)
+**Light interface · original white PDF**
+
+![macOS light interface with white PDF](docs/screenshots/macos-editor-light.png)
+
+**Dark interface · soft green PDF**
+
+![macOS dark interface with green PDF](docs/screenshots/macos-editor-dark-green.png)
 
 <details><summary>Welcome and settings</summary>
 
@@ -50,7 +56,13 @@ The current Mac distribution uses an ad-hoc signature and is not Developer ID no
 
 ### Windows
 
-![Windows editor and PDF preview](docs/screenshots/windows-editor.png)
+**Light interface · original white PDF**
+
+![Windows light interface with white PDF](docs/screenshots/windows-editor-light.png)
+
+**Dark interface · soft green PDF**
+
+![Windows dark interface with green PDF](docs/screenshots/windows-editor-dark-green.png)
 
 <details><summary>Welcome and settings</summary>
 

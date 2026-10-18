@@ -33,7 +33,13 @@ Mac 将应用拖入 Applications；Windows 运行安装器，可选择安装语�
 
 ### macOS
 
-![macOS 编辑与预览](docs/screenshots/macos-editor.png)
+**全亮色界面 · 白色 PDF**
+
+![macOS 亮色界面与白色 PDF](docs/screenshots/macos-editor-light.png)
+
+**暗色界面 · 绿色护眼 PDF**
+
+![macOS 暗色界面与绿色护眼 PDF](docs/screenshots/macos-editor-dark-green.png)
 
 <details><summary>欢迎页与设置</summary>
 
@@ -44,7 +50,13 @@ Mac 将应用拖入 Applications；Windows 运行安装器，可选择安装语�
 
 ### Windows
 
-![Windows 编辑与预览](docs/screenshots/windows-editor.png)
+**全亮色界面 · 白色 PDF**
+
+![Windows 亮色界面与白色 PDF](docs/screenshots/windows-editor-light.png)
+
+**暗色界面 · 绿色护眼 PDF**
+
+![Windows 暗色界面与绿色护眼 PDF](docs/screenshots/windows-editor-dark-green.png)
 
 <details><summary>欢迎页与设置</summary>
 
