@@ -26,4 +26,6 @@ Validation date: 2026-10-18. Builds are local; no GitHub Actions were used.
 
 ## Publication
 
-Pending final source commit, public visibility, three-platform release/feed remote digest checks and removal of the retired distribution repository. Do not treat local success as publication success.
+Source commit `8822519` is pushed. The main repository is public under MIT, and private vulnerability reporting is enabled. Release `v0.2.2` has an English title/body and all three installers. GitHub asset SHA-256 digests match local files; all five platform feed/signature URLs were downloaded anonymously and match local files. The legacy update.json points to the main repository and the correct Mac hash. Main repository Actions run count is zero.
+
+Historical main-repository Releases were deleted after verification. Old distribution Releases are being removed. Deleting `liaoweiyang2017/typst-studio-releases` returned HTTP 403 because the gh credential lacks `delete_repo`; the user has been asked to authorize that scope. The old repository itself must not be reported deleted until that succeeds.
