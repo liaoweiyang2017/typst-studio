@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System.Text.Json;
 using Windows.System;
+using TypstStudio.Core;
 using static TypstStudio.App.UiText;
 namespace TypstStudio.App;
 public sealed partial class MainWindow
@@ -49,7 +50,12 @@ public sealed partial class MainWindow
         var reset = new Button { Content = T("恢复均分", "Equal widths"), Width = Ui.D("SettingsControlWidth") }; reset.Click += ResetSplit_Click;
         Row(Symbol.TwoPage, T("源码与 PDF 分栏", "Editor / PDF split"), T("拖动中间分隔线调整宽度，自动记住比例。", "Drag the divider; the ratio is remembered."), reset);
         Row(Symbol.Find, T("双向定位", "Source mapping"), T("源码 Ctrl+Shift+J；PDF 中 Ctrl+单击公式或选中文字后 Ctrl+Alt+J。", "Source: Ctrl+Shift+J. PDF: Ctrl+click, or select text and press Ctrl+Alt+J."));
-        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.2.1", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
+        Heading(T("软件更新", "Software updates"));
+        Row(Symbol.Download, T("启动时检查更新", "Check at startup"), T("后台下载并验证新版本，不影响编辑；准备好后再安装重启。", "Download and verify in the background, then install when you are ready."), Toggle(_checkUpdatesOnStartup, value => { _checkUpdatesOnStartup = value; SaveSettings(); }));
+        var check = new Button { Content = T("检查更新", "Check for updates"), Width = Ui.D("SettingsControlWidth") }; check.Click += async (_, _) => await CheckUpdatesAsync(true);
+        Row(Symbol.Refresh, T("检查最新版本", "Check latest release"), T("自动选择匹配当前架构的 Windows 安装包。", "Uses the Windows package matching this installed architecture."), check);
+        _updateSettingsStatus = new TextBlock { Text = UpdateMessage(_updates?.State ?? new(UpdateStage.Idle)), TextWrapping = TextWrapping.Wrap, Style = Ui.Style("StudioCaption") }; SettingsContent.Children.Add(_updateSettingsStatus);
+        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.2.2", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
         ShowPage(SettingsPage);
     }
     private void ApplyLanguage()
@@ -59,7 +65,7 @@ public sealed partial class MainWindow
         Ui.Describe(WelcomeFileButton, T("打开文件… (Ctrl+Shift+O)", "Open File… (Ctrl+Shift+O)"));
         Ui.Describe(WelcomeTemplateButton, T("从模板新建工程… (Ctrl+N)", "New Project from Template… (Ctrl+N)"));
         Ui.Describe(RestoreSidebarButton, T("显示侧边栏 (Ctrl+Shift+B)", "Show sidebar (Ctrl+Shift+B)"));
-        UiText.Apply(Root); UiText.Apply(MainMenu); RefreshSidebarLabels(); InitializeEditorTools(); InitializePdfToolbar(); RefreshRecent(); UpdateTitle(); Editor_SelectionChanged(this, new RoutedEventArgs()); SetStatus(T("就绪。", "Ready."));
+        UiText.Apply(Root); UiText.Apply(MainMenu); RefreshSidebarLabels(); InitializeEditorTools(); InitializePdfToolbar(); RefreshRecent(); UpdateTitle(); Editor_SelectionChanged(this, new RoutedEventArgs()); SetStatus(T("就绪。", "Ready.")); if (_updates != null) ApplyUpdateState(_updates.State);
     }
     private void SetCommentShortcut()
     {
@@ -112,7 +118,7 @@ public sealed partial class MainWindow
             _theme = Str("theme", "Default"); if (_theme is not ("Dark" or "Light")) _theme = "Default";
             _language = Str("language", "System"); _commentShortcut = Str("commentShortcut", "Ctrl+/"); _pdfMode = Str("pdfMode", "Standard");
             Root.RequestedTheme = Enum.Parse<ElementTheme>(_theme); Editor.FontSize = Math.Clamp(Num("fontSize", 14), 11, 24); Editor.ShowLineNumbers = Flag("lineNumbers", true); Editor.WordWrap = Num("uiLayoutVersion", 0) < 2 || Flag("wordWrap", true);
-            _pdfHintShown = Flag("pdfHintShown", false); _autoCompile = Flag("autoCompile", true); _compileDelay = (int)Math.Clamp(Num("compileDelay", 160), 100, 1000); _editorRatio = Math.Clamp(Num("editorRatio", 0.5), 0.2, 0.8); SidebarColumn.Width = new GridLength(Math.Clamp(Num("uiLayoutVersion", 0) < 2 ? Ui.D("SidebarDefaultWidth") : Num("sidebarWidth", Ui.D("SidebarDefaultWidth")), Ui.D("SidebarMinWidth"), Ui.D("SidebarMaxWidth")));
+            _checkUpdatesOnStartup = Flag("checkUpdatesOnStartup", true); _pdfHintShown = Flag("pdfHintShown", false); _autoCompile = Flag("autoCompile", true); _compileDelay = (int)Math.Clamp(Num("compileDelay", 160), 100, 1000); _editorRatio = Math.Clamp(Num("editorRatio", 0.5), 0.2, 0.8); SidebarColumn.Width = new GridLength(Math.Clamp(Num("uiLayoutVersion", 0) < 2 ? Ui.D("SidebarDefaultWidth") : Num("sidebarWidth", Ui.D("SidebarDefaultWidth")), Ui.D("SidebarMinWidth"), Ui.D("SidebarMaxWidth")));
             if (s.TryGetProperty("recent", out var recent)) { _recent.Clear(); _recent.AddRange(recent.EnumerateArray().Select(p => p.GetString()!).Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).Take(10)); }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or ArgumentException or InvalidOperationException) { }
@@ -121,7 +127,7 @@ public sealed partial class MainWindow
     }
     private void SaveSettings()
     {
-        try { Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!); File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new { uiLayoutVersion = 2, pdfHintShown = _pdfHintShown, theme = _theme, language = _language, fontSize = Editor.FontSize, lineNumbers = Editor.ShowLineNumbers, wordWrap = Editor.WordWrap, commentShortcut = _commentShortcut, autoCompile = _autoCompile, compileDelay = _compileDelay, pdfMode = _pdfMode, editorRatio = _editorRatio, sidebarWidth = SidebarColumn.Width.Value, recent = _recent })); }
+        try { Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!); File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new { checkUpdatesOnStartup = _checkUpdatesOnStartup, uiLayoutVersion = 2, pdfHintShown = _pdfHintShown, theme = _theme, language = _language, fontSize = Editor.FontSize, lineNumbers = Editor.ShowLineNumbers, wordWrap = Editor.WordWrap, commentShortcut = _commentShortcut, autoCompile = _autoCompile, compileDelay = _compileDelay, pdfMode = _pdfMode, editorRatio = _editorRatio, sidebarWidth = SidebarColumn.Width.Value, recent = _recent })); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { SetStatus(error.Message); }
     }
 }

@@ -3,6 +3,8 @@ namespace TypstStudio.App;
 public partial class App : Application
 {
     private Window? _window;
+    // Retained until process exit; Inno refuses to replace this installation while any instance is alive.
+    private static readonly Mutex RunningMutex = new(false, @"Local\TypstStudio-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.Unicode.GetBytes(Path.GetFullPath(AppContext.BaseDirectory).TrimEnd(Path.DirectorySeparatorChar).ToLowerInvariant()))).ToLowerInvariant());
     internal static void Trace(string text)
     {
         if (!Environment.GetCommandLineArgs().Contains("--smoke")) return;
@@ -16,7 +18,7 @@ public partial class App : Application
     }
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        try { Trace("Creating main window"); _window = new MainWindow(); Trace("Activating"); _window.Activate(); Trace("Activated"); }
+        try { GC.KeepAlive(RunningMutex); Trace("Creating main window"); _window = new MainWindow(); Trace("Activating"); _window.Activate(); Trace("Activated"); }
         catch (Exception e) { Trace(e.ToString()); foreach (System.Collections.DictionaryEntry item in e.Data) Trace(item.Key + "=" + item.Value); throw; }
     }
 }

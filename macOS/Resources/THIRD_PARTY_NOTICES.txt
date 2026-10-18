@@ -1,4 +1,4 @@
-Typst Studio 0.1.8 — independent native macOS editor.
+Typst Studio 0.2.2 — native macOS and Windows editor.
 Typst compiler 0.15.1: https://github.com/typst/typst (Apache-2.0).
 Copyright (c) Typst GmbH and contributors. Full license: Typst-LICENSE.
 Bundled compiler is copied from the local Homebrew installation without modification.
@@ -15,5 +15,5 @@ Copyright Sparkle Project and contributors. Full license: Sparkle-LICENSE.
 Tinymist 0.15.10 (modified for Typst Studio): https://github.com/Myriad-Dreamin/tinymist
 Upstream commit: 45b50f0d928e825248fa1c2fcbcd68549e957b5d. Apache-2.0; full license: Tinymist-LICENSE.
 Typst Studio modifies source-map handling for mathematical identifiers, exact glyph offsets and transformed frames.
-The reproducible patch is maintained as vendor/tinymist-source-map.patch in the application's source repository.
+The reproducible patch is maintained as vendor/tinymist-source-map.patch in the public source repository: https://github.com/liaoweiyang2017/typst-studio.
 Tinymist embeds Typst 0.15.1 and upstream open-source dependencies/fonts; upstream Cargo.lock and dependency notices remain authoritative.

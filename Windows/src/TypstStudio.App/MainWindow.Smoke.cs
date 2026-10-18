@@ -2,6 +2,23 @@ using Microsoft.UI.Xaml;
 namespace TypstStudio.App;
 public sealed partial class MainWindow
 {
+    private async Task CaptureProductAsync(string root, string output)
+    {
+        Directory.CreateDirectory(output);
+        try {
+            _language = "en"; _theme = "Light"; Root.RequestedTheme = ElementTheme.Light; ApplyLanguage(); UpdateCaption();
+            _recent.Clear(); _recent.Add(root); RefreshRecent(); Home_Click(this, new RoutedEventArgs());
+            var scale = Root.XamlRoot.RasterizationScale; AppWindow.Resize(new Windows.Graphics.SizeInt32((int)(1200 * scale), (int)(800 * scale))); await Task.Delay(200);
+            await CaptureAsync(Path.Combine(output, "windows-welcome.png"));
+            await OpenProjectAsync(root, confirmed: true); if (_watcher != null) _watcher.EnableRaisingEvents = false;
+            _theme = "Light"; Root.RequestedTheme = ElementTheme.Light; UpdateCaption(); await Task.Delay(350); Editor.ApplyStyle(); UpdateEditorPosition(); Preview.FitPage(); await Preview.WaitForRenderAsync();
+            await CaptureAsync(Path.Combine(output, "windows-editor.png"));
+            _theme = "Light"; Root.RequestedTheme = ElementTheme.Light; UpdateCaption(); Settings_Click(this, new RoutedEventArgs()); await Task.Delay(200);
+            await CaptureAsync(Path.Combine(output, "windows-settings.png"));
+            await File.WriteAllTextAsync(Path.Combine(output, "windows-capture.txt"), "ok");
+        } catch (Exception error) { await File.WriteAllTextAsync(Path.Combine(output, "windows-capture-error.txt"), error.ToString()); }
+        _closing = true; await DisposeProjectAsync(); Close();
+    }
     private async Task VerifyCompileTargetAsync()
     {
         var main = _entry!; var child = _current!.Path; var session = _session; var pdf = _pdf; var version = _revision;

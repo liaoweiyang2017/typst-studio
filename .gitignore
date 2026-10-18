@@ -8,3 +8,11 @@ Windows/**/bin/
 Windows/**/obj/
 Windows/native/
 Windows/artifacts/
+
+macOS/.build/
+macOS/Resources/icon-variants/
+*.pem
+*.p12
+*.pfx
+
+examples/**/*.pdf

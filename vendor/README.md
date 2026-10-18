@@ -1,7 +1,7 @@
 # Tinymist source-map patch
 
 Pinned upstream: `45b50f0d928e825248fa1c2fcbcd68549e957b5d` (v0.15.10).
-Build with `scripts/build-tinymist.sh` (Rust >= 1.92, network needed only for developer dependencies).
+Build with `macOS/scripts/build-tinymist.sh` (Rust >= 1.92, network needed only for developer dependencies).
 The application bundles the resulting arm64 helper; users do not download compilers at runtime.
 
 The mapping patch modifies `tinymist-query/src/jump.rs`:

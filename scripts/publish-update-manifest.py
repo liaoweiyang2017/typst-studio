@@ -21,7 +21,7 @@ def main():
     if not re.fullmatch(r"v\d{1,6}\.\d{1,6}\.\d{1,6}", tag):
         raise ValueError("Only stable vMAJOR.MINOR.PATCH tags are supported")
     repo = os.environ["GH_REPO"]
-    if repo != "liaoweiyang2017/typst-studio-releases":
+    if repo != "liaoweiyang2017/typst-studio":
         raise ValueError("Unexpected distribution repository")
     version = tag[1:]
     release = json.loads(gh("api", f"repos/{repo}/releases/tags/{tag}"))

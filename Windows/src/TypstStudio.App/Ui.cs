@@ -11,7 +11,9 @@ internal static class Ui
         object? Find(ResourceDictionary dictionary)
         {
             var theme = element.ActualTheme == ElementTheme.Dark ? "Dark" : "Light";
-            if (dictionary.ThemeDictionaries.TryGetValue(theme, out var themed) && themed is ResourceDictionary td && td.TryGetValue(key, out var tv)) return tv;
+            var hasTheme = dictionary.ThemeDictionaries.TryGetValue(theme, out var themed);
+            if (!hasTheme && theme == "Dark") hasTheme = dictionary.ThemeDictionaries.TryGetValue("Default", out themed);
+            if (hasTheme && themed is ResourceDictionary td && td.TryGetValue(key, out var tv)) return tv;
             for (var i = dictionary.MergedDictionaries.Count - 1; i >= 0; i--) { var result = Find(dictionary.MergedDictionaries[i]); if (result != null) return result; }
             return dictionary.TryGetValue(key, out var value) ? value : null;
         }

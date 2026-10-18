@@ -10,6 +10,7 @@ Check(commented.Remove(uncomment.Start, uncomment.Length).Insert(uncomment.Start
 var spans = TypstEditing.Highlight("#let a = \"/* string */\"\n/* outer /* nested */ end */\n$ alpha + 2 $\n= 标题");
 Check(spans.Any(s => s.Style == 1) && spans.Any(s => s.Style == 2) && spans.Any(s => s.Style == 3) && spans.Any(s => s.Style == 5) && spans.Any(s => s.Style == 7), "Typst highlights strings, nested comments, keyword, math and headings");
 Console.WriteLine("PASS: syntax spans and reversible multi-line comments");
+await UpdateTests.RunAsync();
 var root = Path.Combine(Path.GetTempPath(), "TypstStudio-tests-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 try
@@ -41,6 +42,16 @@ try
     Console.WriteLine("PASS: project search, symbol insertion and hidden snapshots");
     await using var engine = new TinymistSession(Path.Combine(AppContext.BaseDirectory, "tinymist.exe"), root, main);
     await engine.InitializeAsync(); var documents = new Dictionary<string, string> { [main] = mainText };
+    var output = new PdfOutput(); var outputPath = Path.ChangeExtension(main, ".pdf");
+    await output.WriteAsync(main, "test PDF bytes"u8.ToArray());
+    var written = await File.ReadAllBytesAsync(outputPath);
+    var modified = File.GetLastWriteTimeUtc(outputPath);
+    await output.WriteAsync(main, written); Check(File.GetLastWriteTimeUtc(outputPath) == modified, "Unchanged PDF skips write");
+    File.SetAttributes(outputPath, FileAttributes.ReadOnly);
+    try { await output.WriteAsync(main, "replacement"u8.ToArray()); throw new Exception("Overwrote read-only PDF"); } catch (IOException) { }
+    Check((await File.ReadAllBytesAsync(outputPath)).AsSpan().SequenceEqual(written), "Failed PDF write retains old output");
+    File.SetAttributes(outputPath, FileAttributes.Normal); File.Delete(outputPath);
+    Console.WriteLine("PASS: atomic same-directory PDF output and readonly preservation");
     var timer = Stopwatch.StartNew(); var pdf = await engine.CompileAsync(documents, CancellationToken.None); Console.WriteLine($"Initial compile: {timer.ElapsedMilliseconds} ms");
     using (var document = new PdfDocument(pdf))
     {

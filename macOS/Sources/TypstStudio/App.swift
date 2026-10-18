@@ -59,8 +59,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     weak var model: StudioModel?
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard model?.confirmTermination() ?? true else { return .terminateCancel }
-        model?.shutdownCompiler()
-        return .terminateNow
+        guard let model else { return .terminateNow }
+        model.shutdownCompiler()
+        model.finishPDFWrites { NSApp.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func windowShouldClose(_ sender: NSWindow) -> Bool { model?.confirmDiscard() ?? true }
@@ -97,6 +99,14 @@ struct StudioView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { section = 4; model.sidebar = true; model.showDiagnostics.toggle() } label: { Image(systemName: model.diagnostics.isEmpty ? "exclamationmark.triangle.fill" : "exclamationmark.triangle.fill").foregroundStyle(model.diagnostics.isEmpty ? Color.secondary : .orange) }.help(model.status)
                 Button { previewVisible.toggle() } label: { Image(systemName: "rectangle.on.rectangle").foregroundStyle(previewVisible ? Color.blue : .secondary) }.help(model.tr("Toggle PDF preview"))
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if !model.pdfOutputError.isEmpty {
+                HStack { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                    Text(model.tr("Could not save PDF beside the source:") + " " + model.pdfOutputError).font(.caption).textSelection(.enabled)
+                    Spacer(); Button { model.pdfOutputError = "" } label: { Image(systemName: "xmark") }.buttonStyle(.borderless)
+                }.padding(8).background(Color(nsColor: .windowBackgroundColor))
             }
         }
         .sheet(isPresented: $model.showSymbols) { SymbolsView(model: model) }

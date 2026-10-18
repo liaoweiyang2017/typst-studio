@@ -28,6 +28,8 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
     @Published var files: [URL] = []
     @Published var pdf: PDFDocument?
     @Published var diagnostics = ""
+    @Published var pdfOutputError = ""
+    private let pdfOutput = PDFOutput()
     @Published var compiling = false
     @Published var elapsed = 0.0
     @Published var dirty = false
@@ -204,6 +206,15 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
                 if session.success, let pdf = session.pdf {
                     self.pdf = pdf; self.displayedSessionKey = key; self.displayedEntryURL = session.entryURL
                     self.successfulRevision = version; self.status = "Preview up to date"
+                    if let entry = session.entryURL, let bytes = result.pdf {
+                        self.pdfOutput.write(bytes, beside: entry) { [weak self] outcome in
+                            DispatchQueue.main.async {
+                                guard let self, self.activeSessionKey == key, self.revision == version else { return }
+                                if case .failure(let error) = outcome { if !(error is CancellationError) { self.pdfOutputError = error.localizedDescription } }
+                                else { self.pdfOutputError = "" }
+                            }
+                        }
+                    }
                 } else { self.successfulRevision = -1; self.status = "Compilation failed · last successful preview"; self.showDiagnostics = true }
             }
         }
@@ -214,6 +225,9 @@ struct OutlineItem: Identifiable { let id: Int; let title: String }
             session.compiler.submit(.init(source: source, directory: directory, root: projectURL ?? directory,
                 document: session.entryURL?.path ?? "untitled", revision: version, completion: completion))
         }
+    }
+    func finishPDFWrites(_ completion: @escaping @MainActor () -> Void) {
+        pdfOutput.flush { DispatchQueue.main.async { completion() } }
     }
     private var updateRestartApproved = false
     func prepareForUpdateRestart() -> Bool {

@@ -21,17 +21,17 @@ Typst Studio $VERSION
 
 快捷键：⌘O 打开，⌘S 保存，⌘B 编译，⇧⌘E 导出 PDF，⌘F 查找。
 TXT
-mkdir -p dist
-hdiutil create -volname "Typst Studio $VERSION" -srcfolder "$STAGE" -ov -format UDZO "dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg"
-hdiutil verify "dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg"
-shasum -a 256 "dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg" > "dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg.sha256"
+mkdir -p ../dist
+hdiutil create -volname "Typst Studio $VERSION" -srcfolder "$STAGE" -ov -format UDZO "../dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg"
+hdiutil verify "../dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg"
+shasum -a 256 "../dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg" > "../dist/Typst-Studio-$VERSION-macOS-$ARCH.dmg.sha256"
 
 python3 - "$APP/Contents/Info.plist" "$ARCH" <<'PYINFO'
 import json, plistlib, sys
 from pathlib import Path
 with open(sys.argv[1], 'rb') as stream:
     info = plistlib.load(stream)
-Path('dist/release-info.json').write_text(json.dumps({
+Path('../dist/release-info.json').write_text(json.dumps({
     'version': info['CFBundleShortVersionString'],
     'build': info['CFBundleVersion'],
     'minimum_macos': info['LSMinimumSystemVersion'],

@@ -12,6 +12,7 @@ enum StudioLanguage {
         return simplifiedChinese[key] ?? key
     }
     static let simplifiedChinese: [String: String] = [
+        "Could not save PDF beside the source:": "无法在源文件旁保存 PDF：",
         "Compile current file": "编译当前文件", "Compiling…": "正在编译…",
         "Document changed. Try navigating again.": "文档已更新，请重新定位。",
         "Source maps locate formulas and included files. Use ⇧⌘J from source, ⌥⌘J from selected PDF text, or ⌘-click a PDF glyph. Unrendered code has no page position.": "源码映射支持公式和被引用文件。源码中按 ⇧⌘J，PDF 选中文字后按 ⌥⌘J，或按住 ⌘ 点击 PDF 字形。未渲染的代码没有页面位置。",

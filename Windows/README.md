@@ -1,10 +1,10 @@
 # Typst Studio for Windows
 
-Windows 0.1.9 uses a native WinUI 3 interface, a persistent Tinymist process, and PDFium rendering. The macOS application continues to use SwiftUI/AppKit/PDFKit.
+Windows 0.2.2 uses a native WinUI 3 interface, a persistent Tinymist process, and PDFium rendering. The macOS application continues to use SwiftUI/AppKit/PDFKit.
 
 ## Features
 
-- Icon-and-text sidebar dropdown: Project files (default), Project search, Document outline, Math symbols, and Problems.
+- Native icon sidebar selector: Project files (default), Project search, Document outline, Math symbols, and Problems.
 - Source search includes unsaved buffers, supports case sensitivity, cancels obsolete requests, and caps results at 200. Search is scoped to Typst source files.
 - Main-document PDF outline preserves cross-file headings and hierarchy, expands by default, and navigates to PDF locations. Current-source headings are the fallback before a PDF is available.
 - Searchable Mac symbol catalog inserts Typst math syntax at the selection. Compiler problems navigate to their source line and can be recompiled from the panel.
@@ -44,4 +44,6 @@ The app's `--smoke <owned-fixture-directory>` mode drives the real WinUI editor 
 
 ## Source and releases
 
-Source stays in the private typst-studio repository. Windows releases use `windows-v0.2.1` tags in the public distribution repository and do not replace the macOS Sparkle latest feed. Windows 0.2.1 packages are not Authenticode-signed.
+Source and all platform installers share the main public typst-studio repository and its v0.2.2 Release. Architecture-specific signed feeds select Windows packages. Windows 0.2.2 packages are not Authenticode-signed.
+
+Successful compilation writes the original PDF beside its entry source. Native startup update checks use NetSparkle core 3.1.0 with Strict Ed25519 verification and a WinUI state bar; installation waits for explicit restart approval and saved-document protection.

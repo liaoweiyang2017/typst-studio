@@ -21,6 +21,7 @@ public sealed partial class MainWindow : Window
     private CancellationTokenSource _navigation = new();
     private FileSystemWatcher? _watcher;
     private byte[]? _pdf;
+    private readonly PdfOutput _pdfOutput = new();
     private int _revision, _pdfRevision = -1;
     private bool _settingText, _closing, _disposed, _opening;
     private int _fileEpoch, _compileOperation;
@@ -43,12 +44,13 @@ public sealed partial class MainWindow : Window
         if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter) { presenter.PreferredMinimumWidth = Math.Min((int)(Ui.D("WindowMinWidth") * dpi), width); presenter.PreferredMinimumHeight = Math.Min((int)(Ui.D("WindowMinHeight") * dpi), height); }
         App.Trace("Window resized"); AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "Studio.ico"));
         App.Trace("Icon loaded"); ConfigureChrome();
-        if (_args.Contains("--smoke")) _settingsPath = Path.Combine(Path.GetTempPath(), "TypstStudio-Smoke-" + Environment.ProcessId, "settings.json");
+        if (_args.Contains("--smoke") || _args.Contains("--screenshots")) _settingsPath = Path.Combine(Path.GetTempPath(), "TypstStudio-Smoke-" + Environment.ProcessId, "settings.json");
         App.Trace("Backdrop set"); LoadSettings(); InitializeEditorTools(); InitializePdfToolbar(); RefreshRecent(); Root.ActualThemeChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateCaption); App.Trace("Settings loaded");
         Preview.SourceRequested += async (page, x, y) => await InverseAsync(page, x, y);
         Preview.Error += message => SetStatus(message);
         Preview.PageChanged += (_, _) => UpdatePdfToolbar();
         Busy.RegisterPropertyChangedCallback(Microsoft.UI.Xaml.Controls.ProgressRing.IsActiveProperty, (_, _) => UpdateCompilePresentation());
+        Closed += (_, _) => _updates?.Dispose();
         AppWindow.Closing += async (_, e) =>
         {
             if (_closing) return;
@@ -59,6 +61,9 @@ public sealed partial class MainWindow : Window
         Root.Loaded += async (_, _) =>
         {
             ApplyLanguage(); UpdateCaption();
+            if (!_args.Contains("--smoke") && !_args.Contains("--screenshots")) _ = InitializeUpdaterAsync();
+            var screenshots = Array.IndexOf(_args, "--screenshots");
+            if (screenshots >= 0 && _args.Length > screenshots + 2) { await CaptureProductAsync(_args[screenshots + 1], _args[screenshots + 2]); return; }
             var smoke = Array.IndexOf(_args, "--smoke");
             if (smoke >= 0 && smoke + 1 < _args.Length) await RunSmokeAsync(_args[smoke + 1]);
             else if (_args.Skip(1).FirstOrDefault(path => File.Exists(path) && Path.GetExtension(path).Equals(".typ", StringComparison.OrdinalIgnoreCase)) is { } file)
@@ -75,7 +80,7 @@ public sealed partial class MainWindow : Window
         AddShortcut(VirtualKey.J, VirtualKeyModifiers.Control | VirtualKeyModifiers.Menu, () => { if (!Preview.NavigateSelection()) SetStatus(UiText.T("请先在 PDF 中选择文字，或 Ctrl+单击公式。", "Select PDF text or Ctrl+click a formula first.")); return Task.CompletedTask; });
     }
     private void AddShortcut(VirtualKey key, VirtualKeyModifiers modifiers, Func<Task> action)
-    { var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers }; accelerator.Invoked += async (_, e) => { e.Handled = true; try { await action(); } catch (Exception error) { SetStatus(error.Message); } }; Root.KeyboardAccelerators.Add(accelerator); }
+    { var accelerator = new KeyboardAccelerator { Key = key, Modifiers = modifiers }; accelerator.Invoked += async (_, e) => { e.Handled = true; if (_updateExitApproved) return; try { await action(); } catch (Exception error) { SetStatus(error.Message); } }; Root.KeyboardAccelerators.Add(accelerator); }
     private void SetStatus(string message) { Status.Text = message; UpdateCompilePresentation(); }
     private void InitializePicker(object picker) => WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
     private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await SafeAsync(PickFolderAsync);
@@ -228,6 +233,12 @@ public sealed partial class MainWindow : Window
             if (_pdf == null || !pdf.AsSpan().SequenceEqual(_pdf)) await Preview.SetDocumentAsync(pdf, () => revision == _revision && session == _session);
             if (revision != _revision || session != _session) return;
             _compileError = ""; _pdf = pdf; _pdfRevision = revision; if (SidebarPicker.SelectedIndex is 2 or 4) _ = RefreshSidebarAsync();
+            try { if (_entry != null) await _pdfOutput.WriteAsync(_entry, pdf, token); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) {
+                if (revision == _revision) SetStatus(UiText.T("编译成功，但无法保存同目录 PDF：", "Compiled, but could not save the PDF: ") + error.Message);
+                return;
+            }
+            if (revision != _revision || session != _session) return;
             SetStatus(UiText.English ? $"Compiled · {watch.Elapsed.TotalMilliseconds:F0} ms" : $"编译完成 · {watch.Elapsed.TotalMilliseconds:F0} ms");
             if (!_pdfHintShown) { SetStatus(Status.Text + UiText.T(" · Ctrl+单击 PDF 可定位源码", " · Ctrl+click PDF to locate source")); _pdfHintShown = true; SaveSettings(); }
         }
@@ -427,7 +438,7 @@ public sealed partial class MainWindow : Window
             for (var i = 0; i < 50 && _session!.Problems.Count > 0; i++) await Task.Delay(20);
             await RefreshSidebarAsync(); if (_problemList.Items.Count != 0) throw new InvalidOperationException("Fixed errors must disappear");
             SidebarPicker.SelectedIndex = 0;
-            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.2.1", rasterizationScale = Root.XamlRoot.RasterizationScale, uiCommands = "explicit current-file compile, stable entry on browse/inverse, failed compile preserves PDF, rapid target changes, find/replace undo, format undo, sidebar restore, zoom/page jump" }));
+            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.2.2", rasterizationScale = Root.XamlRoot.RasterizationScale, uiCommands = "explicit current-file compile, stable entry on browse/inverse, failed compile preserves PDF, rapid target changes, find/replace undo, format undo, sidebar restore, zoom/page jump" }));
         }
         catch (Exception error) { await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = false, error = error.ToString() })); }
         if (_args.Contains("--smoke-exit")) { _closing = true; await DisposeProjectAsync(); Close(); }

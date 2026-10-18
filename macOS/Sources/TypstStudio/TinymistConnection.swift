@@ -15,7 +15,7 @@ final class TinymistConnection: @unchecked Sendable {
     var processIdentifier: Int32? { process?.processIdentifier }
     static var executable: URL {
         if Bundle.main.bundleURL.pathExtension == "app" { return Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/tinymist") }
-        return URL(fileURLWithPath: ProcessInfo.processInfo.environment["TINYMIST_BIN"] ?? FileManager.default.currentDirectoryPath + "/tools/tinymist/target/release/tinymist")
+        return URL(fileURLWithPath: ProcessInfo.processInfo.environment["TINYMIST_BIN"] ?? FileManager.default.currentDirectoryPath + "/../tools/tinymist/target/release/tinymist")
     }
     func start(root: URL) throws {
         buffer.removeAll()
