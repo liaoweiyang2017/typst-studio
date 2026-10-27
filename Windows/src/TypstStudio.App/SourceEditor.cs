@@ -12,6 +12,8 @@ public sealed partial class SourceEditor : UserControl
     private EditorBaseControl _view => NativeView;
     private Editor Native => _view.Editor;
     private readonly DispatcherTimer _highlight = new() { Interval = TimeSpan.FromMilliseconds(60) };
+    private readonly DispatcherTimer _navigationFlash = new() { Interval = TimeSpan.FromSeconds(3) };
+    private long _navigationPosition = -1;
     private string _text = "";
     private bool _ready, _readOnly = true, _numbers = true, _wrap = true;
     public event EventHandler<RoutedEventArgs>? TextChanged;
@@ -22,6 +24,7 @@ public sealed partial class SourceEditor : UserControl
         ActualThemeChanged += (_, _) => ApplyStyle();
         RegisterPropertyChangedCallback(FontSizeProperty, (_, _) => ApplyStyle());
         _highlight.Tick += (_, _) => { _highlight.Stop(); Highlight(); };
+        _navigationFlash.Tick += (_, _) => ClearNavigationMark();
     }
     public void ActivateEditor() => FindName("NativeView");
     public new bool Focus(FocusState state) => _ready && _view.Focus(state);
@@ -30,7 +33,7 @@ public sealed partial class SourceEditor : UserControl
             if (_ready) return; _ready = true;
             Native.CodePage = 65001; Native.UseTabs = false; Native.TabWidth = 2; Native.ScrollWidth = 1; Native.ScrollWidthTracking = true;
             Native.SetMarginTypeN(0, MarginType.Number); Native.SetMarginWidthN(1, 0); Native.SetMarginWidthN(2, 0);
-            Native.Modified += (_, e) => { if ((e.ModificationType & 3) == 0) return; _text = Native.GetText(Native.TextLength + 1).TrimEnd('\0'); _highlight.Stop(); _highlight.Start(); TextChanged?.Invoke(this, new RoutedEventArgs()); };
+            Native.Modified += (_, e) => { if ((e.ModificationType & 3) == 0) return; ClearNavigationMark(); _text = Native.GetText(Native.TextLength + 1).TrimEnd('\0'); _highlight.Stop(); _highlight.Start(); TextChanged?.Invoke(this, new RoutedEventArgs()); };
             Native.UpdateUI += (_, e) => { if ((e.Updated & 2) != 0) SelectionChanged?.Invoke(this, new RoutedEventArgs()); UpdateActiveLine(); };
             var text = _text; Native.ReadOnly = false; Native.SetText(text); Native.EmptyUndoBuffer(); Native.ReadOnly = _readOnly; ApplyStyle();
     }
@@ -42,6 +45,20 @@ public sealed partial class SourceEditor : UserControl
     public bool ShowLineNumbers { get => _numbers; set { _numbers = value; ApplyStyle(); } }
     public bool WordWrap { get => _wrap; set { _wrap = value; ApplyStyle(); } }
     public void Select(int start, int length) { if (_ready) { Native.SetSel(Bytes(start), Bytes(start + length)); Native.ScrollCaret(); } }
+    public void FlashNavigation()
+    {
+        _navigationPosition = Native.CurrentPos; _navigationFlash.Stop(); _navigationFlash.Start();
+        DispatcherQueue.TryEnqueue(UpdateNavigationMark);
+    }
+    private void ClearNavigationMark() { _navigationFlash.Stop(); _navigationPosition = -1; NavigationHighlight.Visibility = Visibility.Collapsed; }
+    private void UpdateNavigationMark()
+    {
+        if (_navigationPosition < 0) return;
+        var y = Native.PointYFromPosition(_navigationPosition) / XamlRoot.RasterizationScale;
+        NavigationHighlight.Visibility = y >= 0 && y < ActualHeight ? Visibility.Visible : Visibility.Collapsed;
+        NavigationHighlight.Margin = new Thickness(0, Math.Max(0, y), 0, 0); NavigationHighlight.Height = LineHeight;
+    }
+    internal bool HasNavigationMark => _navigationFlash.IsEnabled && NavigationHighlight.Visibility == Visibility.Visible;
     public void ClearUndoRedoHistory() { if (_ready) Native.EmptyUndoBuffer(); }
     public void Undo() { if (_ready) Native.Undo(); }
     public void Redo() { if (_ready) Native.Redo(); }
@@ -64,6 +81,9 @@ public sealed partial class SourceEditor : UserControl
         if (!_ready) return;
         var bg = Ui.OpaqueColor(this, "LayerFillColorDefaultBrush"); var fg = Ui.OpaqueColor(this, "TextFillColorPrimaryBrush", bg);
         Native.StyleSetFore(32, Color(fg)); Native.StyleSetBack(32, Color(bg)); Native.StyleSetFont(32, ((Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["StudioCodeFont"]).Source); Native.StyleSetSizeFractional(32, (int)(FontSize * 75)); Native.StyleClearAll();
+        Native.ExtraAscent = Native.ExtraDescent = 0;
+        var extra = Math.Max(0, (int)Math.Round(FontSize * 1.5 * (XamlRoot?.RasterizationScale ?? 1)) - Native.TextHeight(0));
+        Native.ExtraAscent = extra / 2; Native.ExtraDescent = extra - extra / 2;
         string[] colors = ["TextFillColorTertiaryBrush", "SystemFillColorSuccessBrush", "AccentTextFillColorPrimaryBrush", "AccentTextFillColorSecondaryBrush", "AccentTextFillColorPrimaryBrush", "SystemFillColorCautionBrush", "TextFillColorPrimaryBrush"];
         for (var i = 0; i < colors.Length; i++) Native.StyleSetFore(i + 1, Color(Ui.OpaqueColor(this, colors[i], bg)));
         Native.StyleSetBack(33, Color(bg)); Native.SetFoldMarginColour(true, Color(bg)); Native.SetFoldMarginHiColour(true, Color(bg)); Native.MarginLeft = (int)Ui.D("Space12"); Native.MarginRight = (int)Ui.D("Space12");
@@ -75,6 +95,7 @@ public sealed partial class SourceEditor : UserControl
     }
     private void UpdateActiveLine()
     {
+        UpdateNavigationMark();
         if (!_ready || !_numbers) { ActiveLineNumberHost.Visibility = Visibility.Collapsed; return; }
         var line = Native.LineFromPosition(Native.CurrentPos); var scale = XamlRoot?.RasterizationScale ?? 1;
         var y = Native.PointYFromPosition(Native.PositionFromLine(line)) / scale;
@@ -89,5 +110,6 @@ public sealed partial class SourceEditor : UserControl
         var position = 0; long bytes = 0;
         foreach (var span in TypstEditing.Highlight(_text)) { bytes += Encoding.UTF8.GetByteCount(_text.AsSpan(position, span.Start - position)); var count = Encoding.UTF8.GetByteCount(_text.AsSpan(span.Start, span.Length)); Native.StartStyling(bytes, 0); Native.SetStyling(count, span.Style); bytes += count; position = span.Start + span.Length; }
     }
+    internal double LineHeight => Native.TextHeight(0) / XamlRoot.RasterizationScale;
     internal bool HasHighlight => _ready && TypstEditing.Highlight(_text).Any(s => Native.GetStyleAt(Bytes(s.Start)) == s.Style);
 }

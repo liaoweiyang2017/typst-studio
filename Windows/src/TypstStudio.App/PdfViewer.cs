@@ -17,6 +17,7 @@ public sealed class PdfViewer : Grid
     private readonly List<(Grid Host, Image Image, Canvas Marker)> _pages = [];
     private readonly Dictionary<int, int> _renderedWidths = [];
     private readonly SemaphoreSlim _renderGate = new(1);
+    private readonly DispatcherTimer _navigationFlash = new() { Interval = TimeSpan.FromSeconds(3) };
     private PdfDocument? _document;
     private CancellationTokenSource _render = new();
     private double _zoom = 1;
@@ -61,7 +62,8 @@ public sealed class PdfViewer : Grid
     }
     public PdfViewer()
     {
-        Background = Ui.Brush(this, "SolidBackgroundFillColorBaseBrush"); ActualThemeChanged += (_, _) => Background = Ui.Brush(this, "SolidBackgroundFillColorBaseBrush");
+        _navigationFlash.Tick += (_, _) => { _navigationFlash.Stop(); foreach (var page in _pages) page.Marker.Children.Clear(); };
+        Background = Ui.Brush(this, "LayerFillColorDefaultBrush"); ActualThemeChanged += (_, _) => Background = Ui.Brush(this, "LayerFillColorDefaultBrush");
         _scroll.Content = _stack; Children.Add(_scroll);
         _scroll.ViewChanged += (_, _) => { ViewMetricsChanged?.Invoke(); PageChanged?.Invoke(CurrentPage, _pages.Count); ScheduleRender(); };
         SizeChanged += (_, _) => { LayoutPages(); ScheduleRender(); };
@@ -150,13 +152,15 @@ public sealed class PdfViewer : Grid
         var scale = _pages[index].Host.Width / _document.Pages[index].Width;
         var y = PaperInset + _pages.Take(index).Sum(p => p.Host.Height + PaperInset) + point.Y * scale;
         _scroll.ChangeView(null, Math.Max(0, y - 100), null, true);
-        Mark(index, point.X, point.Y - 8, 16 / scale, 16 / scale);
+        Mark(index, point.X - 8 / scale, point.Y - 20 / scale, 80 / scale, 32 / scale);
+        _navigationFlash.Stop(); _navigationFlash.Start();
         ScheduleRender();
     }
     private Point PagePoint(int page, Grid host, PointerRoutedEventArgs args)
     { var p = args.GetCurrentPoint(host).Position; var scale = _document!.Pages[page].Width / host.Width; return new(p.X * scale, p.Y * scale); }
     private void Press(int page, Grid host, PointerRoutedEventArgs args)
     {
+        _navigationFlash.Stop();
         if (_document == null || !args.GetCurrentPoint(host).Properties.IsLeftButtonPressed) return;
         host.Focus(FocusState.Pointer);
         var point = PagePoint(page, host, args);
@@ -186,8 +190,9 @@ public sealed class PdfViewer : Grid
     private void AddMarker(int page, double x, double y, double width, double height)
     {
         var scale = _pages[page].Host.Width / _document!.Pages[page].Width;
-        var marker = new Rectangle { Stroke = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue), StrokeThickness = 1,
-            Fill = Ui.Brush(this, "AccentFillColorDefaultBrush"), Opacity = Ui.D("SelectionOpacity"), Width = Math.Max(3, width * scale), Height = Math.Max(3, height * scale) };
+        var accent = Ui.Brush(this, "AccentFillColorDefaultBrush");
+        var marker = new Border { BorderBrush = accent, BorderThickness = new Thickness(2), CornerRadius = Ui.Radius("ControlCornerRadius"),
+            Child = new Rectangle { Fill = accent, Opacity = Ui.D("SelectionOpacity") }, Width = Math.Max(6, width * scale), Height = Math.Max(6, height * scale) };
         Canvas.SetLeft(marker, x * scale); Canvas.SetTop(marker, y * scale); _pages[page].Marker.Children.Add(marker);
     }
     private void CopySelection()
@@ -201,5 +206,6 @@ public sealed class PdfViewer : Grid
         SourceRequested?.Invoke(_selectionPage, _selection.Left + _selection.Width / 2, _selection.Top + _selection.Height / 2); return true;
     }
     public async Task WaitForRenderAsync() { await _renderGate.WaitAsync(); _renderGate.Release(); }
-    public void Close() { _generation++; _render.Cancel(); _stack.Children.Clear(); _pages.Clear(); _renderedWidths.Clear(); var document = _document; _document = null; PageChanged?.Invoke(0, 0); if (document != null) _ = Task.Run(document.Dispose); }
+    internal bool HasNavigationMark => _navigationFlash.IsEnabled && _pages.Any(page => page.Marker.Children.Count > 0);
+    public void Close() { _navigationFlash.Stop(); _generation++; _render.Cancel(); _stack.Children.Clear(); _pages.Clear(); _renderedWidths.Clear(); var document = _document; _document = null; PageChanged?.Invoke(0, 0); if (document != null) _ = Task.Run(document.Dispose); }
 }

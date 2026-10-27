@@ -8,17 +8,11 @@ internal static class Ui
     public static Thickness Pad(string key) => (Thickness)Application.Current.Resources[key];
     public static Brush Brush(FrameworkElement element, string key)
     {
-        object? Find(ResourceDictionary dictionary)
-        {
-            var theme = element.ActualTheme == ElementTheme.Dark ? "Dark" : "Light";
-            var hasTheme = dictionary.ThemeDictionaries.TryGetValue(theme, out var themed);
-            if (!hasTheme && theme == "Dark") hasTheme = dictionary.ThemeDictionaries.TryGetValue("Default", out themed);
-            if (hasTheme && themed is ResourceDictionary td && td.TryGetValue(key, out var tv)) return tv;
-            for (var i = dictionary.MergedDictionaries.Count - 1; i >= 0; i--) { var result = Find(dictionary.MergedDictionaries[i]); if (result != null) return result; }
-            return dictionary.TryGetValue(key, out var value) ? value : null;
-        }
-        return Find(Application.Current.Resources) as Brush ?? (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+        var resource = (Border)Microsoft.UI.Xaml.Markup.XamlReader.Load(
+            $"<Border xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' RequestedTheme='{element.ActualTheme}' Background='{{ThemeResource {key}}}'/>");
+        return resource.Background;
     }
+
     public static Windows.UI.Color OpaqueColor(FrameworkElement element, string key, Windows.UI.Color? background = null)
     {
         var bg = background ?? ((SolidColorBrush)Brush(element, "SolidBackgroundFillColorBaseBrush")).Color;

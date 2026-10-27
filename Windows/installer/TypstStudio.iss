@@ -7,7 +7,7 @@
 [Setup]
 AppId={{9CD1EBB5-89BC-460D-B688-104E2268A31A}
 AppName=Typst Studio
-AppVersion=0.2.2
+AppVersion=0.2.3
 AppPublisher=Weiyang Liao
 DefaultDirName={localappdata}\Programs\Typst Studio
 DefaultGroupName=Typst Studio
@@ -21,7 +21,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 #endif
 OutputDir=..\artifacts\installers
-OutputBaseFilename=Typst-Studio-0.2.2-Windows-{#TargetArchitecture}-Setup
+OutputBaseFilename=Typst-Studio-0.2.3-Windows-{#TargetArchitecture}-Setup
 SetupIconFile={#SourceDirectory}\Assets\Studio.ico
 UninstallDisplayIcon={app}\TypstStudio.App.exe
 Compression=lzma2/fast

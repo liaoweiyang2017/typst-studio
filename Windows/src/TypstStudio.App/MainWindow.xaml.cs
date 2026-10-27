@@ -216,7 +216,7 @@ public sealed partial class MainWindow : Window
         if (_session == null || _current == null || _disposed || _opening) return;
         if (Busy.IsActive && string.Equals(_entry, _current.Path, StringComparison.OrdinalIgnoreCase)) return;
         _compile.Cancel(); _compile.Dispose(); _compile = new(); _navigation.Cancel();
-        _entry = _current.Path; _revision++; _pdfRevision = -1; _compileError = "";
+        _entry = _current.Path; UpdateTreeEntry(); _revision++; _pdfRevision = -1; _compileError = "";
         UpdateCompilePresentation();
         await CompileNowAsync(_compile.Token);
     }
@@ -276,7 +276,7 @@ public sealed partial class MainWindow : Window
             await OpenBufferAsync(point.Path, fromNavigation: true);
             if (version != _revision || !StringComparer.OrdinalIgnoreCase.Equals(_current?.Path, point.Path)) return;
             var offset = SourceCoordinates.Offset(_current!.Text, point.Line, point.Column);
-            SelectSource(offset, 0);
+            SelectSource(offset, 0); Editor.FlashNavigation();
             SetStatus(UiText.English ? $"Located in {Path.GetFileName(point.Path)}, line {point.Line + 1}. Main PDF retained." : "已定位到 " + Path.GetFileName(point.Path) + $"，行 {point.Line + 1}。主 PDF 保持不变。");
         }
         catch (OperationCanceledException) { } catch (Exception error) { SetStatus(error.Message); }
@@ -364,12 +364,17 @@ public sealed partial class MainWindow : Window
             await OpenProjectAsync(root, confirmed: true);
             if (_watcher != null) _watcher.EnableRaisingEvents = false; // Smoke screenshots must not trigger asset recompilation.
             if (_pdf == null || _current == null) throw new InvalidOperationException("Initial compile failed: " + Status.Text);
+            await VerifyFluentAsync(root);
             var offset = _current.Text.IndexOf("alpha", StringComparison.Ordinal); SelectSource(offset, 5);
-            await ForwardAsync(); if (!Status.Text.Contains("已定位") && !Status.Text.Contains("Located")) throw new InvalidOperationException(Status.Text);
+            await ForwardAsync(); if (!Preview.HasNavigationMark) throw new InvalidOperationException("PDF navigation highlight is missing"); if (!Status.Text.Contains("已定位") && !Status.Text.Contains("Located")) throw new InvalidOperationException(Status.Text);
             var source = Path.Combine(root, "chapter.typ"); var child = await File.ReadAllTextAsync(source); var pos = SourceCoordinates.Position(SourceBuffer.Normalize(child), SourceBuffer.Normalize(child).IndexOf("alpha", StringComparison.Ordinal));
             var target = await _session!.ForwardAsync(source, pos.Line, pos.Column, CancellationToken.None);
             var point = target.Points.First(); Preview.GoTo(point); await InverseAsync(point.Page - 1, point.X + 0.5, point.Y - 1);
             if (_current?.Path != source) throw new InvalidOperationException("Cross-file inverse navigation failed: " + Status.Text);
+            await Task.Delay(50); if (!Editor.HasNavigationMark) throw new InvalidOperationException("Source navigation highlight is missing");
+            await CaptureAsync(Path.Combine(root, "navigation-feedback.png"));
+            await Task.Delay(3100);
+            if (Editor.HasNavigationMark || Preview.HasNavigationMark) throw new InvalidOperationException("Navigation feedback did not clear");
             await VerifyCompileTargetAsync();
             var previous = _current.Text; SelectSource(previous.Length, 0); Editor.SelectedText = "\nNative editing smoke test.\n";
             await WaitForCompileAsync(previous + "\nNative editing smoke test.\n"); if (_pdfRevision != _revision || !_current.Dirty) throw new InvalidOperationException("Live editing compile failed");
@@ -438,7 +443,7 @@ public sealed partial class MainWindow : Window
             for (var i = 0; i < 50 && _session!.Problems.Count > 0; i++) await Task.Delay(20);
             await RefreshSidebarAsync(); if (_problemList.Items.Count != 0) throw new InvalidOperationException("Fixed errors must disappear");
             SidebarPicker.SelectedIndex = 0;
-            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.2.2", rasterizationScale = Root.XamlRoot.RasterizationScale, uiCommands = "explicit current-file compile, stable entry on browse/inverse, failed compile preserves PDF, rapid target changes, find/replace undo, format undo, sidebar restore, zoom/page jump" }));
+            await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = true, architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), status = Status.Text, pages = point.Page, version = "0.2.3", rasterizationScale = Root.XamlRoot.RasterizationScale, uiCommands = "colored SVG decoding, folder state, entry emphasis, native badge, theme switching, line spacing, word count, timed bidirectional navigation feedback, explicit current-file compile, stable entry on browse/inverse, failed compile preserves PDF, rapid target changes, find/replace undo, format undo, sidebar restore, zoom/page jump" }));
         }
         catch (Exception error) { await File.WriteAllTextAsync(report, JsonSerializer.Serialize(new { success = false, error = error.ToString() })); }
         if (_args.Contains("--smoke-exit")) { _closing = true; await DisposeProjectAsync(); Close(); }

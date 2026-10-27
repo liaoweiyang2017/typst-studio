@@ -60,7 +60,7 @@ public sealed partial class MainWindow
     {
         if (SidebarPicker == null || _sidebarPages.Count == 0) return;
         string[] labels = [T("工程文件", "Project files"), T("工程搜索", "Search"), T("文档大纲", "Outline"), T("数学符号", "Symbols"), T("编译问题", "Problems")];
-        string[] glyphs = ["\uE8B7", "\uE721", "\uE8FD", "\uE94F", "\uE7BA"];
+        string[] glyphs = ["\uE8B7", "\uE721", "\uE8FD", "\uE8EF", "\uE7BA"];
         SidebarPicker.SetItems(labels, glyphs);
         _searchKey = null; _problemSignature = null; _outlinePdf = null; _outlineSource = null;
         _projectQuery.PlaceholderText = T("搜索工程源码", "Search project source"); _matchCase.Content = T("区分大小写", "Match case"); _symbolQuery.PlaceholderText = T("搜索符号或名称", "Search symbols or names"); _retryCompile.Content = T("重新编译", "Compile again");

@@ -5,9 +5,14 @@ public sealed partial class MainWindow
 {
     private int _treeEpoch;
     [Microsoft.UI.Xaml.Data.Bindable]
-    public sealed record FileItem(string Name, string? Path, bool IsFolder = false)
+    public sealed record FileItem(string Name, string? Path, bool IsFolder = false) : System.ComponentModel.INotifyPropertyChanged
     {
-        public string Glyph => IsFolder ? "\uE8B7" : string.Equals(System.IO.Path.GetExtension(Path),".json", StringComparison.OrdinalIgnoreCase) ? "\uE943" : "\uE8A5";
+        private bool _expanded, _entry;
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        public Microsoft.UI.Xaml.Media.Imaging.SvgImageSource IconSource => FileIcons.For(Path!, IsFolder, _expanded);
+        public Windows.UI.Text.FontWeight EntryWeight => _entry ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+        public bool IsExpanded { get => _expanded; set { _expanded = value; PropertyChanged?.Invoke(this, new(nameof(IconSource))); } }
+        public void SetEntry(string? entry) { _entry = !IsFolder && string.Equals(Path, entry, StringComparison.OrdinalIgnoreCase); PropertyChanged?.Invoke(this, new(nameof(EntryWeight))); }
         public override string ToString() => Name;
     }
     private static FileItem[] ReadDirectory(string root) => Directory.EnumerateFileSystemEntries(root)
@@ -22,6 +27,7 @@ public sealed partial class MainWindow
             if (root != _root || epoch != _treeEpoch) return; Files.RootNodes.Clear();
             foreach (var item in entries)
             {
+                item.SetEntry(_entry);
                 var node = new TreeViewNode { Content = item, HasUnrealizedChildren = item.IsFolder }; Files.RootNodes.Add(node);
                 if (item.IsFolder && _entry != null && TypstStudio.Core.ProjectFiles.Inside(item.Path!, _entry)) { await PopulateFolderAsync(node, root, epoch); node.IsExpanded = true; }
             }
@@ -47,13 +53,20 @@ public sealed partial class MainWindow
             var entries = await Task.Run(() => ReadDirectory(folder.Path)); if (root != _root || epoch != _treeEpoch) return;
             foreach (var item in entries)
             {
+                item.SetEntry(_entry);
                 var child = new TreeViewNode { Content = item, HasUnrealizedChildren = item.IsFolder }; node.Children.Add(child);
                 if (item.IsFolder && _entry != null && TypstStudio.Core.ProjectFiles.Inside(item.Path!, _entry)) { await PopulateFolderAsync(child, root, epoch); child.IsExpanded = true; }
             }
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { SetStatus(error.Message); }
     }
-    private async void Files_Expanding(TreeView sender, TreeViewExpandingEventArgs e) { if (_root != null) await PopulateFolderAsync(e.Node, _root, _treeEpoch); }
+    private async void Files_Expanding(TreeView sender, TreeViewExpandingEventArgs e) { ((FileItem)e.Node.Content).IsExpanded = true; if (_root != null) await PopulateFolderAsync(e.Node, _root, _treeEpoch); }
+    private void Files_Collapsed(TreeView sender, TreeViewCollapsedEventArgs e) => ((FileItem)e.Node.Content).IsExpanded = false;
+    private void UpdateTreeEntry()
+    {
+        void Visit(IEnumerable<TreeViewNode> nodes) { foreach (var node in nodes) { ((FileItem)node.Content).SetEntry(_entry); Visit(node.Children); } }
+        Visit(Files.RootNodes);
+    }
     private async void Files_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
     {
         var item = args.InvokedItem is TreeViewNode node ? node.Content as FileItem : args.InvokedItem as FileItem;

@@ -2,7 +2,7 @@
 
 **面向 macOS 与 Windows 的原生 Typst 编辑器。** 在同一工作区编辑源码、编译 PDF，并在文字、公式与跨文件源码之间定位。
 
-[English](README.md) · [下载安装包](https://github.com/liaoweiyang2017/typst-studio/releases/latest) · [版本说明](docs/Release-0.2.2.md) · [参与贡献](CONTRIBUTING.md)
+[English](README.md) · [下载安装包](https://github.com/liaoweiyang2017/typst-studio/releases/latest) · [版本说明](docs/Release-0.2.3.md) · [参与贡献](CONTRIBUTING.md)
 
 ## 特色功能
 
@@ -20,8 +20,8 @@
 | 平台 | 系统要求 | 安装包 |
 | --- | --- | --- |
 | macOS | Apple Silicon，macOS 14 及以上 | [ARM64 DMG](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.2/Typst-Studio-0.2.2-macOS-arm64.dmg) |
-| Windows ARM64 | Windows 10 build 19041 及以上，建议 Windows 11 | [ARM64 Setup](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.2/Typst-Studio-0.2.2-Windows-arm64-Setup.exe) |
-| Windows x64 | Intel／AMD，Windows 10 build 19041 及以上，建议 Windows 11 | [x64 Setup](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.2/Typst-Studio-0.2.2-Windows-x64-Setup.exe) |
+| Windows ARM64 | Windows 10 build 19041 及以上，建议 Windows 11 | [ARM64 Setup](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.3/Typst-Studio-0.2.3-Windows-arm64-Setup.exe) |
+| Windows x64 | Intel／AMD，Windows 10 build 19041 及以上，建议 Windows 11 | [x64 Setup](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.3/Typst-Studio-0.2.3-Windows-x64-Setup.exe) |
 
 Mac 将应用拖入 Applications；Windows 运行安装器，可选择安装语言和是否创建桌面快捷方式。Windows 采用当前用户安装，附带 .NET／WinUI 运行时。
 

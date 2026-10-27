@@ -4,9 +4,10 @@
 
 **A native Typst editor for macOS and Windows.** Write, compile, preview, and navigate scientific documents in a desktop interface built for each platform.
 
-[简体中文](README_CN.md) · [Download](https://github.com/liaoweiyang2017/typst-studio/releases/latest) · [Release notes](docs/Release-0.2.2.md) · [Contributing](CONTRIBUTING.md)
+[简体中文](README_CN.md) · [Download](https://github.com/liaoweiyang2017/typst-studio/releases/latest) · [Release notes](docs/Release-0.2.3.md) · [Contributing](CONTRIBUTING.md)
 
-![Version](https://img.shields.io/badge/version-0.2.2-blue)
+![Windows version](https://img.shields.io/badge/Windows-0.2.3-blue)
+![macOS version](https://img.shields.io/badge/macOS-0.2.2-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-lightgrey)
 
@@ -26,8 +27,8 @@
 | Platform | Requirements | Installer |
 | --- | --- | --- |
 | macOS | Apple Silicon, macOS 14 or later | [ARM64 DMG](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.2/Typst-Studio-0.2.2-macOS-arm64.dmg) |
-| Windows ARM64 | Windows 10 build 19041 or later; Windows 11 recommended | [ARM64 Setup](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.2/Typst-Studio-0.2.2-Windows-arm64-Setup.exe) |
-| Windows x64 | Intel/AMD Windows 10 build 19041 or later; Windows 11 recommended | [x64 Setup](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.2/Typst-Studio-0.2.2-Windows-x64-Setup.exe) |
+| Windows ARM64 | Windows 10 build 19041 or later; Windows 11 recommended | [ARM64 Setup](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.3/Typst-Studio-0.2.3-Windows-arm64-Setup.exe) |
+| Windows x64 | Intel/AMD Windows 10 build 19041 or later; Windows 11 recommended | [x64 Setup](https://github.com/liaoweiyang2017/typst-studio/releases/download/v0.2.3/Typst-Studio-0.2.3-Windows-x64-Setup.exe) |
 
 On macOS, drag the application to Applications. On Windows, run Setup; choose English or Simplified Chinese and whether to create a desktop shortcut. The Windows installer is per-user and includes its .NET/WinUI runtime.
 

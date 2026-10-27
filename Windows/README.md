@@ -1,6 +1,6 @@
 # Typst Studio for Windows
 
-Windows 0.2.2 uses a native WinUI 3 interface, a persistent Tinymist process, and PDFium rendering. The macOS application continues to use SwiftUI/AppKit/PDFKit.
+Windows 0.2.3 uses a native WinUI 3 interface, a persistent Tinymist process, and PDFium rendering. The macOS application continues to use SwiftUI/AppKit/PDFKit.
 
 ## Features
 
@@ -10,7 +10,9 @@ Windows 0.2.2 uses a native WinUI 3 interface, a persistent Tinymist process, an
 - Searchable Mac symbol catalog inserts Typst math syntax at the selection. Compiler problems navigate to their source line and can be recompiled from the panel.
 
 - Fluent welcome page with Open Folder, New from Template, Open File and Recent Projects; native top menu bar and grouped settings page.
-- A continuous three-pane workspace with thin separators, without rounded cards around source or PDF.
+- A Mica-backed sidebar with colored SVG file icons, 32 DIP native tree rows and a bold compilation entry. Rounded editor/PDF surfaces retain draggable pane dividers.
+- A native SelectorBar with a problem badge, an accent Compile action, compact formatting commands, readable PDF zoom, 1.5× code line spacing and live word count.
+- Bidirectional navigation briefly outlines the source row or PDF destination, including formula and cross-file jumps.
 
 - Open a project folder or Typst file, automatically choose main.typ, filter and navigate source files.
 - Native Scintilla editing with Typst syntax highlighting and optional line numbers, undo/redo, find, font sizing and plain-text paste. Unsaved buffers are retained when switching source files; switching resets the visible editor's undo history.
@@ -44,6 +46,6 @@ The app's `--smoke <owned-fixture-directory>` mode drives the real WinUI editor 
 
 ## Source and releases
 
-Source and all platform installers share the main public typst-studio repository and its v0.2.2 Release. Architecture-specific signed feeds select Windows packages. Windows 0.2.2 packages are not Authenticode-signed.
+Source and all platform installers share the main public typst-studio repository and its v0.2.2 Release. Architecture-specific signed feeds select Windows packages. Windows 0.2.3 packages are not Authenticode-signed.
 
 Successful compilation writes the original PDF beside its entry source. Native startup update checks use NetSparkle core 3.1.0 with Strict Ed25519 verification and a WinUI state bar; installation waits for explicit restart approval and saved-document protection.

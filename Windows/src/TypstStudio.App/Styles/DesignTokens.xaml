@@ -21,15 +21,15 @@
  <x:Double x:Key="SidebarDefaultWidth">260</x:Double>
  <x:Double x:Key="SidebarMinWidth">200</x:Double>
  <x:Double x:Key="SidebarMaxWidth">400</x:Double>
- <x:Double x:Key="TreeRowHeight">28</x:Double>
+ <x:Double x:Key="TreeRowHeight">32</x:Double>
  <x:Double x:Key="TreeIndent">16</x:Double>
  <x:Double x:Key="WelcomeActionsWidth">320</x:Double>
  <x:Double x:Key="WelcomeRecentWidth">360</x:Double>
  <x:Double x:Key="WelcomeIconSize">96</x:Double>
  <x:Double x:Key="RecentRowHeight">56</x:Double>
  <x:Double x:Key="EditorHeaderHeight">40</x:Double>
- <x:Double x:Key="FormatBarHeight">36</x:Double>
- <x:Double x:Key="ScaleBoxWidth">72</x:Double>
+ <x:Double x:Key="FormatBarHeight">40</x:Double>
+ <x:Double x:Key="ScaleBoxWidth">96</x:Double>
  <x:Double x:Key="PaperMargin">24</x:Double>
  <x:Double x:Key="PaperElevation">16</x:Double>
  <x:Double x:Key="DividerWidth">1</x:Double>
@@ -79,9 +79,10 @@
  <Style x:Key="StudioSubtitle" TargetType="TextBlock" BasedOn="{StaticResource SubtitleTextBlockStyle}"><Setter Property="FontFamily" Value="{ThemeResource StudioUIFont}"/><Setter Property="FontSize" Value="{ThemeResource FontSubtitle}"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
  <Style x:Key="StudioTitle" TargetType="TextBlock" BasedOn="{StaticResource TitleTextBlockStyle}"><Setter Property="FontFamily" Value="{ThemeResource StudioUIFont}"/><Setter Property="FontSize" Value="{ThemeResource FontTitle}"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
  <Style x:Key="StudioIconButton" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}"><Setter Property="Width" Value="{ThemeResource ControlHeightStandard}"/><Setter Property="Height" Value="{ThemeResource ControlHeightStandard}"/><Setter Property="MinWidth" Value="{ThemeResource ControlHeightStandard}"/><Setter Property="Padding" Value="{ThemeResource Zero}"/><Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}"/></Style>
+ <Style x:Key="StudioFormatButton" TargetType="AppBarButton"><Setter Property="IsCompact" Value="True"/><Setter Property="LabelPosition" Value="Collapsed"/><Setter Property="Width" Value="{ThemeResource FormatButtonSize}"/><Setter Property="Height" Value="{ThemeResource FormatButtonSize}"/><Setter Property="MinWidth" Value="{ThemeResource FormatButtonSize}"/><Setter Property="MinHeight" Value="{ThemeResource FormatButtonSize}"/><Setter Property="Padding" Value="{ThemeResource Zero}"/></Style>
  <Style x:Key="StudioWelcomeButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}"><Setter Property="Width" Value="{ThemeResource WelcomeActionsWidth}"/><Setter Property="Height" Value="{ThemeResource ControlHeightLarge}"/><Setter Property="Padding" Value="{ThemeResource ControlPadding}"/><Setter Property="FontSize" Value="{ThemeResource FontBody}"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Background" Value="{ThemeResource SubtleFillColorTransparentBrush}"/><Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/><Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}"/></Style>
  <Style x:Key="StudioTreeItem" TargetType="TreeViewItem"><Setter Property="Height" Value="{ThemeResource TreeRowHeight}"/><Setter Property="MinHeight" Value="{ThemeResource TreeRowHeight}"/><Setter Property="FontSize" Value="{ThemeResource FontBody}"/><Setter Property="Padding" Value="{ThemeResource Zero}"/></Style>
- <x:Double x:Key="FindOverlayWidth">360</x:Double><x:Double x:Key="PdfExpandedToolbarWidth">448</x:Double><x:Double x:Key="EditorStatusMaxWidth">176</x:Double><x:Double x:Key="MinimumPaperWidth">100</x:Double><x:Double x:Key="SelectionOpacity">0.2</x:Double>
+ <x:Double x:Key="FindOverlayWidth">360</x:Double><x:Double x:Key="PdfExpandedToolbarWidth">472</x:Double><x:Double x:Key="EditorStatusMaxWidth">176</x:Double><x:Double x:Key="MinimumPaperWidth">100</x:Double><x:Double x:Key="SelectionOpacity">0.2</x:Double>
  <FontFamily x:Key="StudioCodeFont">Cascadia Mono</FontFamily>
  <Thickness x:Key="Inset24_16_24_32">24,16,24,32</Thickness>
  <x:Double x:Key="Gap6">8</x:Double>
@@ -101,7 +102,7 @@
  <Style TargetType="TextBlock" BasedOn="{StaticResource StudioBody}"/>
  <Style TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}"><Setter Property="FontSize" Value="{ThemeResource FontBody}"/><Setter Property="FontFamily" Value="{ThemeResource StudioUIFont}"/><Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}"/></Style>
  <Thickness x:Key="ZoomTextPadding">4,4,28,4</Thickness>
- <x:Double x:Key="FormatButtonSize">28</x:Double>
+ <x:Double x:Key="FormatButtonSize">32</x:Double>
  <x:Double x:Key="RecentPathMaxWidth">260</x:Double>
  <x:Double x:Key="ToggleMinWidth">100</x:Double>
 </ResourceDictionary>

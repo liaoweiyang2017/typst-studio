@@ -55,7 +55,7 @@ public sealed partial class MainWindow
         var check = new Button { Content = T("检查更新", "Check for updates"), Width = Ui.D("SettingsControlWidth") }; check.Click += async (_, _) => await CheckUpdatesAsync(true);
         Row(Symbol.Refresh, T("检查最新版本", "Check latest release"), T("自动选择匹配当前架构的 Windows 安装包。", "Uses the Windows package matching this installed architecture."), check);
         _updateSettingsStatus = new TextBlock { Text = UpdateMessage(_updates?.State ?? new(UpdateStage.Idle)), TextWrapping = TextWrapping.Wrap, Style = Ui.Style("StudioCaption") }; SettingsContent.Children.Add(_updateSettingsStatus);
-        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.2.2", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
+        Heading(T("关于", "About")); Row(Symbol.Help, "Typst Studio 0.2.3", T("WinUI 3 原生界面 · Tinymist · Scintilla · PDFium", "Native WinUI 3 · Tinymist · Scintilla · PDFium"));
         ShowPage(SettingsPage);
     }
     private void ApplyLanguage()
