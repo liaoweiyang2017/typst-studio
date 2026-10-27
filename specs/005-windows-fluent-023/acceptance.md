@@ -17,7 +17,9 @@ Date: 2026-10-27. Implementation confirmed by the user. Compilation and native d
 
 ## Delivery and cleanup
 
-Pending final installer checks, source push, public Release/feed verification and removal of identified build/test staging. Complete these before reporting the task finished.
+Source implementation is committed and pushed (79ec56f; documentation follow-up 068614e). Public latest Release v0.2.3 is published with an English title/body, two Windows installers, checksums and signed feeds. All 14 GitHub asset digests match either the final local output or the prior unchanged Mac asset. All seven public latest feed/manifest/signature URLs returned matching contents; Mac appcast.xml/release-info.json/update.json match v0.2.2 byte for byte. Actions run count remains zero.
+
+Build cleanup is complete: C:\TypstStudio-build is removed from Parallels; current isolated QA installations, 32 test profiles, startup logs and public demo copies are removed. Local macOS/.build, tools/tinymist/target, Windows/native, dist and obsolete Windows/artifacts payloads/installers are removed. Only two final 0.2.3 EXEs and their two SHA-256 files remain under Windows/artifacts/installers. Final retained hashes were rechecked. Canonical sources, Git history, signing keys, installed user applications and shared SDK/toolchains are preserved. Shared package caches were not purged across other projects.
 
 ## Limits
 

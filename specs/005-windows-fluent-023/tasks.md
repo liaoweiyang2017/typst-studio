@@ -9,5 +9,5 @@
 - [x] Refine theme surfaces, line metrics and word count (PDF/LAYOUT).
 - [x] Verify native UI, source mapping and core safety regressions on ARM64/x64.
 - [x] Build/install/package Windows 0.2.3 locally; preserve macOS 0.2.2 update channel.
-- [ ] Commit/push, publish English Release, verify packages and signed feeds.
-- [ ] Clean identified task-owned build/cache/staging outputs and report acceptance, changed-file mapping and tradeoffs.
+- [x] Commit/push, publish English Release, verify packages and signed feeds.
+- [x] Clean identified task-owned build/cache/staging outputs and report acceptance, changed-file mapping and tradeoffs.
