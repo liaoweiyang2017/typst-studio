@@ -46,6 +46,6 @@ The app's `--smoke <owned-fixture-directory>` mode drives the real WinUI editor 
 
 ## Source and releases
 
-Source and all platform installers share the main public typst-studio repository and its v0.2.2 Release. Architecture-specific signed feeds select Windows packages. Windows 0.2.3 packages are not Authenticode-signed.
+Source and all platform installers share the main public typst-studio repository and its v0.2.3 Release. The Mac 0.2.2 assets and update metadata are carried forward unchanged. Architecture-specific signed feeds select Windows packages. Windows 0.2.3 packages are not Authenticode-signed.
 
 Successful compilation writes the original PDF beside its entry source. Native startup update checks use NetSparkle core 3.1.0 with Strict Ed25519 verification and a WinUI state bar; installation waits for explicit restart approval and saved-document protection.
